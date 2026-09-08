@@ -1,84 +1,146 @@
+![Wippy Builder — standalone applications from pinned inputs](docs/assets/banner.png)
+
 # Wippy Builder
 
-Assemble standalone Wippy applications from a pinned runtime, application packs,
-and native Go components.
+[![Build checks](https://github.com/wippyai/builder/actions/workflows/check.yml/badge.svg)](https://github.com/wippyai/builder/actions/workflows/check.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-edbd59)](LICENSE)
 
-Bee and the hello example use the same build path. Local acceptance tests cover
-source-free boot, Hub updates, restart and base/bootstrap modes. GitHub CI runs
-these checks. The runtime host APIs are implemented in pending upstream PRs
+Build a standalone Wippy executable from a pinned runtime, versioned application
+packs, and native Go components. The generated entry point calls Wippy's
+`application.Run` API.
+
+[Quick start](#quick-start) · [Build inputs](#build-inputs) · [GitHub Actions](#github-actions) · [SDK](docs/SDK.md)
+
+**Development preview.** Linux amd64 assembly and executable acceptance are
+verified. The runtime host APIs are implemented in upstream PRs
 [667](https://github.com/wippyai/runtime/pull/667) and
-[668](https://github.com/wippyai/runtime/pull/668). There is no stable release yet.
+[668](https://github.com/wippyai/runtime/pull/668), pending review and merge.
 
-## Application manifest
+## Quick start
 
-An application selects its executable name, exact runtime revision and build
-profile, versioned Hub root, bundled dependency graph, native component factories,
-and whether the embedded application is a recoverable base or a bootstrap seed.
-Native components are compiled into the executable. They retain normal Wippy
-registration, typed module declarations, scheduler integration and host-selected
-permission checks.
-
-The embedded packs seed the first deployment. Later launches use the installed
-lock graph and preserve Hub updates.
-
-See the [application and native module SDK](docs/SDK.md) for pack configuration,
-boot registration, typed modules, filesystem events and argument passing, and
-[implementation requirements](docs/IMPLEMENTATION.md) for the release boundary.
-
-## Local use
-
-Go, Git and a C compiler are required. The assembler uses Wippy's Cobra CLI library
-and the Go standard library, and selects the runtime toolchain pinned by the manifest.
+Requires Go 1.27.0, Git, and a C compiler. From this checkout:
 
 ```sh
-make check tools
-dist/wippy-builder validate path/to/wippy.build.json
-dist/wippy-builder build path/to/wippy.build.json --output dist/my-app
+make tools
+
+# Build Wippy with the native components selected by the manifest.
+dist/wippy-builder toolchain examples/hello/wippy.build.json --output dist/wippy
+
+# Lint and pack the example, then assemble its executable.
+make example-pack WIPPY="$PWD/dist/wippy"
+make build MANIFEST=examples/hello/wippy.build.json OUTPUT=dist/hello
+
+./dist/hello run Ada
+# Hello, Ada!
 ```
 
-The manifest lists exact pack identities, versions and SHA-256 checksums, a
-runtime commit and Go version, optional checksummed runtime patches, and native
-Go module versions with exported component factories. See
-[the hello manifest](examples/hello/wippy.build.json).
+The executable contains the runtime and application packs. First boot seeds a
+local deployment; later launches preserve installed application updates.
+[The hello example](examples/hello) and [Bee](https://github.com/wippyai/bee) use
+the same assembly path.
 
-After intentionally regenerating input packs, `dist/wippy-builder seal MANIFEST`
-refreshes their checksums. Normal builds only verify checksums. A build emits the
-executable, JSON provenance, module files, license inventory and runtime patches.
-`WIPPY_BUILD_RUNTIME_REPOSITORY` may select a local Git mirror for development;
-the builder checks out the manifest's exact commit into a temporary directory.
+## Build inputs
 
-The composite GitHub action accepts `manifest` and `output` inputs. Consumers
-should pin this repository to a reviewed commit. Bee's Linux amd64 workflow runs
-Lua and native module tests, offline PTY checks, packaging and tag-triggered draft
-releases.
+[`wippy.build.json`](examples/hello/wippy.build.json) describes the complete build:
 
-Use `dist/wippy-builder toolchain MANIFEST --output dist/wippy` to build the same native
-component selection for source linting, tests and pack generation. This step does
-not require pack files to exist yet. After packing, seal the input hashes and
-build the application executable. Native modules from private repositories must
-set `private: true`; the builder adds only those module prefixes to Go's private
-fetch/checksum configuration and uses normal Git credential handling.
+| Input | Selected by the manifest |
+|---|---|
+| Runtime | Git commit, Go version, build tags, and checksummed patches |
+| Application | Module identity, command, base/bootstrap mode, and data paths |
+| Packs | Exact module versions, local pack files, and SHA-256 checksums |
+| Native components | Go module versions, import paths, and exported boot factories |
+
+The builder copies inputs into staging, verifies their hashes, and checks out the
+selected runtime commit. Go's resolved package owner and version must match each
+native pin. Native modules use Wippy boot registration, typed Lua exports, and
+process permissions.
+
+UI code, assets, and published configuration belong in application packs.
+Native components are compiled into the executable. The [SDK guide](docs/SDK.md)
+covers both paths, including filesystem notifications and argument forwarding.
+
+## Commands
+
+| Command | Purpose |
+|---|---|
+| `validate MANIFEST` | Check manifest fields and version pins |
+| `toolchain MANIFEST --output PATH` | Build Wippy with the selected native components |
+| `pack MANIFEST --toolchain PATH` | Pack a source root and record its checksum |
+| `seal MANIFEST` | Refresh checksums after intentionally replacing input packs |
+| `build MANIFEST --output PATH` | Assemble the standalone application |
+| `package BINARY --output ARCHIVE` | Verify and archive the build artifacts |
+
+Run `wippy-builder COMMAND --help` for flags. Status output uses terminal colors
+and honors `NO_COLOR`; redirected logs remain plain text.
+
+`pack` prepares one self-contained source root. Multi-module builds supply
+independently prepared dependency packs. Private native modules set `private: true`
+and use the host's Git credentials. `WIPPY_BUILD_RUNTIME_REPOSITORY` can
+select a local Git mirror; the manifest commit still determines the source.
+
+## GitHub Actions
+
+With packs prepared and their checksums recorded, add this step after checkout:
+
+```yaml
+- name: Build application
+  uses: wippyai/builder@6e2852f063f833fdcee9b6a2f63ccee6d8523e01
+  with:
+    manifest: wippy.build.json
+    output: dist/my-app
+```
+
+The action installs Go and builds the assembler. Set `mode: toolchain` to produce
+the native development runtime. Its `builder` output provides the assembler path
+for subsequent packaging steps. Private dependencies can use the `token` input.
+
+The [example workflow](.github/workflows/check.yml) demonstrates toolchain and pack
+preparation, offline execution, Hub updates, base/bootstrap checks, and packaging.
+Bee's [release workflow](https://github.com/wippyai/bee/blob/feat/native-ioevents/.github/workflows/native.yml)
+adds desktop acceptance and tag-triggered draft releases.
 
 ## Release artifacts
 
-`dist/wippy-builder package dist/my-app --output dist/my-app-linux-amd64.tar.gz`
-collects the executable, manifest provenance, effective Go module graph, dependency
-license inventory and runtime patches, and emits a SHA-256 checksum file. Archive
-ownership and timestamps are normalized. Binary bytes also depend on application
-pack timestamps and the native C toolchain.
+```sh
+dist/wippy-builder package dist/hello --output dist/hello-linux-amd64.tar.gz
+```
 
-The inventory includes the Go license and available module license files; modules
-without root license files are explicitly listed for downstream review. Application
-publishers must retain their own license and resolve missing upstream notices before
-public distribution. The builder verifies that Go's selected native versions equal
-the manifest; a dependency upgrade or replacement cannot silently change them.
+The archive contains the executable, provenance, effective `go.mod` and `go.sum`,
+available dependency notices, and runtime patch sources. A separate SHA-256 file
+covers the archive.
 
-The CLI emits terminal-aware status colors and honors `NO_COLOR`. Redirected logs
-remain plain text. `wippy-builder pack MANIFEST --toolchain PATH --version VERSION`
-prepares a self-contained source pack and seals its checksum; dependency packs
-are supplied independently in a multi-module manifest.
+Provenance records the manifest, assembler revision, source modification status,
+and artifact hashes. Packaging verifies a snapshot of every artifact before
+writing the archive atomically. Archive ownership and timestamps are normalized;
+binary bytes also depend on pack timestamps and the C toolchain.
 
-Packaging snapshots every file, verifies the recorded hashes, then writes the
-archive atomically. Provenance records the assembler's Git revision and whether
-its source was modified. Native imports are checked against the Go module that
-owns them, including nested modules and replacements.
+## Updates
+
+Hub updates replace the installed application pack graph. Base mode provides
+explicit recovery from embedded code; bootstrap mode seeds only the first
+deployment. Application databases retain their normal migration checks.
+
+Native changes require a new executable. The runtime update gate checks Lua
+exports and types against the compiled modules. Semantic native-version
+requirements and additional platform acceptance remain pending.
+
+## Development
+
+```sh
+make check
+make smoke OUTPUT=dist/hello
+```
+
+`make check` runs race tests, vet, and formatting checks. Executable acceptance
+covers empty-directory boot, exact argument forwarding, Hub updates, restart,
+base recovery, and failed-update preservation.
+
+Code lives in [`cmd/wippy-builder`](cmd/wippy-builder) and
+[`internal/assemble`](internal/assemble). See the [implementation guide](docs/IMPLEMENTATION.md)
+for ownership, validation, and remaining release work.
+
+## License
+
+Builder is [MIT licensed](LICENSE). Applications, Wippy, and native dependencies
+retain their own licenses. The generated notice inventory lists missing root
+license files for review before public distribution.
