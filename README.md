@@ -67,7 +67,8 @@ covers both paths, including filesystem notifications and argument forwarding.
 | `build MANIFEST --output PATH` | Assemble the standalone application |
 | `package BINARY --output ARCHIVE` | Verify and archive the build artifacts |
 
-Run `wippy-builder COMMAND --help` for flags. Status output uses terminal colors
+Run `wippy-builder COMMAND --help` for flags and examples. Successful commands
+report the manifest or output path on stderr. Status output uses terminal colors
 and honors `NO_COLOR`; redirected logs remain plain text.
 
 `pack` prepares one self-contained source root. Multi-module builds supply
@@ -75,13 +76,19 @@ independently prepared dependency packs. Private native modules set `private: tr
 and use the host's Git credentials. `WIPPY_BUILD_RUNTIME_REPOSITORY` can
 select a local Git mirror; the manifest commit still determines the source.
 
+Go's normal module and compilation caches are reused across builds. Set
+`GOMODCACHE` and `GOCACHE` to user-owned absolute directories to share them across
+local checkouts. Runtime source is staged per build; the optional Git mirror
+avoids repeatedly downloading it. GitHub workflows currently use runner-local
+caches without uploading cache archives, keeping Actions cache storage unused.
+
 ## GitHub Actions
 
 With packs prepared and their checksums recorded, add this step after checkout:
 
 ```yaml
 - name: Build application
-  uses: wippyai/builder@fe458f77bdfc09e7cc3baa7da0a9482aa71638d5
+  uses: wippyai/builder@e80e35b6f9301ca01a366b4d1de3eddcf8f3e97d
   with:
     manifest: wippy.build.json
     output: dist/my-app
