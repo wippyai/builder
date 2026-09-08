@@ -14,10 +14,18 @@ with tempfile.TemporaryDirectory(prefix="wippy-standalone-") as temporary:
     cwd.mkdir()
     state = root / "application state"
     env = {**os.environ, "HOME": str(root), "XDG_CONFIG_HOME": str(root / "config"), "PATH": "/nonexistent"}
-    for args, expected in [(["run", "Ada"], "Hello, Ada!"), (["run", "Again"], "Hello, Again!"), (["--base", "run", "Recovery"], "Hello, Recovery!")]:
+    cases = [(["run", "Ada"], "Hello, Ada!"), (["run", "Again"], "Hello, Again!"), (["--base", "run", "Recovery"], "Hello, Recovery!")]
+    bootstrap = "--bootstrap" in sys.argv[2:]
+    if bootstrap:
+        cases.pop()
+    for args, expected in cases:
         result = subprocess.run([str(binary), "--state-dir", str(state), *args], cwd=cwd, env=env, text=True, capture_output=True, timeout=20)
         if result.returncode or expected not in result.stdout:
             raise SystemExit(f"Standalone run failed: {result.returncode}\n{result.stdout}\n{result.stderr}")
+    if bootstrap:
+        result = subprocess.run([str(binary), "--state-dir", str(state), "--base"], cwd=cwd, env=env, text=True, capture_output=True, timeout=20)
+        if result.returncode == 0 or "bootstrap applications do not expose a base deployment" not in result.stderr:
+            raise SystemExit("Bootstrap unexpectedly exposed base recovery: " + result.stderr)
     if list(cwd.iterdir()):
         raise SystemExit("Standalone runtime wrote application state into the caller directory")
     if not (state / "deployment" / "wippy.lock").is_file():

@@ -35,9 +35,23 @@ jobs:
         output: dist/hello
     - name: Verify standalone execution with networking disabled
       run: sudo unshare --net -- python3 tests/standalone.py "$PWD/dist/hello"
+    - name: Verify canonical Hub updates through the binary
+      run: python3 tests/hub.py dist/hello examples/hello/wippy.build.json
+    - name: Verify bootstrap mode
+      run: |
+        python3 - <<'PY'
+        import json
+        from pathlib import Path
+        path = Path("examples/hello/wippy.build.json")
+        manifest = json.loads(path.read_text())
+        manifest["application"]["mode"] = "bootstrap"
+        path.with_name("bootstrap.json").write_text(json.dumps(manifest))
+        PY
+        python3 builder.py build examples/hello/bootstrap.json --output dist/hello-bootstrap
+        python3 tests/standalone.py dist/hello-bootstrap --bootstrap
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: hello-linux-amd64
         path: |
           dist/hello
-          dist/hello.provenance.json
+          dist/hello.*

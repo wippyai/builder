@@ -3,7 +3,7 @@
   "name": "hello",
   "runtime": {
     "repository": "https://github.com/wippyai/runtime.git",
-    "commit": "d47e88bd7d26c0169a41315aa7427aa00a860686",
+    "commit": "b8c7a9324256dd40a034f29c4a8b25457587fceb",
     "go": "1.27.0",
     "tags": [
       "fts5",
