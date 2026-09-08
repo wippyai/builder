@@ -17,6 +17,9 @@ jobs:
     timeout-minutes: 10
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        fetch-depth: 0
+        persist-credentials: false
     - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
       with:
         go-version-file: go.mod
@@ -32,6 +35,8 @@ jobs:
         runner: [ubuntu-24.04-arm, macos-26, macos-26-intel, windows-2025, windows-11-arm]
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        persist-credentials: false
     - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
       with:
         go-version-file: go.mod
@@ -39,10 +44,13 @@ jobs:
     - run: go test ./...
     - run: go vet ./...
   standalone:
+    needs: unit
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        persist-credentials: false
     - name: Build pinned development runtime
       uses: ./
       with:

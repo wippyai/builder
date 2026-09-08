@@ -1,6 +1,4 @@
-![Wippy Builder — standalone applications from pinned inputs](docs/assets/banner.png)
-
-# Wippy Builder
+![Wippy Builder](docs/assets/banner.svg)
 
 [![Build checks](https://github.com/wippyai/builder/actions/workflows/check.yml/badge.svg)](https://github.com/wippyai/builder/actions/workflows/check.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-edbd59)](LICENSE)
@@ -9,10 +7,10 @@ Build a standalone Wippy executable from a pinned runtime, versioned application
 packs, and native Go components. The generated entry point calls Wippy's
 `application.Run` API.
 
-[Quick start](#quick-start) · [Build inputs](#build-inputs) · [GitHub Actions](#github-actions) · [SDK](docs/SDK.md)
+[Quick start](#quick-start) · [Commands](#commands) · [GitHub Actions](#github-actions) · [SDK](docs/SDK.md) · [Documentation](docs/README.md)
 
-**Development preview.** Linux amd64 assembly and executable acceptance are
-verified. The runtime host APIs are implemented in upstream PRs
+**Alpha.** CLI checks cover Linux, macOS and Windows on amd64 and arm64.
+Standalone application acceptance runs on Linux amd64. The runtime host APIs are implemented in upstream PRs
 [667](https://github.com/wippyai/runtime/pull/667) and
 [668](https://github.com/wippyai/runtime/pull/668), pending review and merge.
 
@@ -96,7 +94,7 @@ for subsequent packaging steps. Private dependencies can use the `token` input.
 
 The [example workflow](.github/workflows/check.yml) demonstrates toolchain and pack
 preparation, offline execution, Hub updates, base/bootstrap checks, and packaging.
-Bee's [release workflow](https://github.com/wippyai/bee/blob/feat/native-ioevents/.github/workflows/native.yml)
+Bee's [release workflow](https://github.com/wippyai/bee/blob/main/.github/workflows/native.yml)
 adds desktop acceptance and tag-triggered draft releases.
 
 ## Release artifacts
@@ -122,7 +120,7 @@ deployment. Application databases retain their normal migration checks.
 
 Native changes require a new executable. The runtime update gate checks Lua
 exports and types against the compiled modules. Semantic native-version
-requirements and additional platform acceptance remain pending.
+requirements and application acceptance beyond Linux remain pending.
 
 ## Development
 
@@ -147,3 +145,5 @@ for ownership, validation, and remaining release work.
 Builder is [MIT licensed](LICENSE). Applications, Wippy, and native dependencies
 retain their own licenses. The generated notice inventory lists missing root
 license files for review before public distribution.
+
+[Contributing](CONTRIBUTING.md) · [Code of conduct](https://github.com/wippyai/.github/blob/main/.github/CODE_OF_CONDUCT.md) · [Security](SECURITY.md)
