@@ -44,6 +44,9 @@ that the commit belongs to main, reruns CI, and uses pinned GoReleaser to create
 a **draft** GitHub release. Review its assets and notes before publication.
 Development checks create no tags. Manual release runs require an existing tag.
 
+Tag a release commit whose complete message contains no GitHub Actions skip
+directive, including `[skip ci]`. A skipped tag-push workflow produces no assets.
+
 ## Application artifacts
 
 `wippy-builder package` packages an assembled application's verified executable,
