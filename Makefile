@@ -5,9 +5,16 @@ OUTPUT ?= dist/application
 WIPPY ?= wippy
 BUILDER_REVISION ?=
 .PHONY: check test build tools example-pack smoke
-check: test
+check: repository-check test
 	go vet ./...
 	@test -z "$$(gofmt -l cmd internal)"
+ACTIONLINT ?= go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+GITLEAKS ?= go run github.com/zricethezav/gitleaks/v8@v8.30.1
+.PHONY: repository-check
+repository-check:
+	$(ACTIONLINT)
+	$(GITLEAKS) git --log-opts=--all --redact --no-banner
+	$(GITLEAKS) dir --redact --no-banner
 test:
 	go test -race ./...
 tools:

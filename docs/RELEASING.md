@@ -28,6 +28,12 @@ or rebase. The aggregate check requires Linux race/format/vet checks, CLI tests
 on every release platform, and Linux application acceptance covering offline boot,
 argument forwarding, Hub updates and bootstrap mode.
 
+`make check` includes `make repository-check`: actionlint validates workflows,
+and Gitleaks scans history and current files with redacted output and a Wippy Hub
+token rule. Standalone assembly waits for this gate. Dependabot groups weekly
+Actions and Go dependency updates to limit PR runs. Actions default to read-only
+permissions and require full commit pins; checkout does not retain credentials.
+
 After merging and choosing a version, create a `v…` tag on the reviewed main
 commit. Release tags cannot be moved or deleted. The release workflow checks
 that the commit belongs to main, reruns CI, and uses pinned GoReleaser to create
@@ -60,3 +66,8 @@ and modification status from Go's VCS build information.
 
 Signing and Hub publication require separate configuration. Store private keys
 in restricted secret storage; they are never release assets or pack inputs.
+
+The repository is currently private. Action sharing permits use within the Wippy
+organization; public source and anonymous release downloads require public
+visibility. There is no separate GitHub Pages site. See [repository setup](GITHUB.md)
+for security settings and [contributing](../CONTRIBUTING.md) for review conventions.

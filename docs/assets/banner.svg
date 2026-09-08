@@ -1,25 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="title description">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="240" viewBox="0 0 1200 240" role="img" aria-labelledby="title description">
   <title id="title">Wippy&#160;Builder</title>
-  <desc id="description">Build standalone Wippy applications from a runtime, application packs and native modules.</desc>
-  <rect width="1200" height="320" rx="16" fill="#10151b"/>
-  <g font-family="DejaVu Sans">
-    <text x="60" y="76" fill="#a2acb8" font-size="13" letter-spacing="3">WIPPY / BUILD TOOLS</text>
-    <text x="56" y="148" fill="#f0f3f6" font-size="58" font-weight="bold">Wippy&#160;Builder</text>
-    <text x="60" y="193" fill="#b9c3ce" font-size="23">Standalone applications. Pinned inputs.</text>
-  </g>
-  <text x="60" y="259" fill="#edbd59" font-family="DejaVu Sans Mono" font-size="16">$ wippy-builder build wippy.build.json --output dist/app</text>
-  <g fill="#171e27" stroke="#36404d">
-    <rect x="751" y="60" width="190" height="52" rx="7"/>
-    <rect x="751" y="134" width="190" height="52" rx="7"/>
-    <rect x="751" y="208" width="190" height="52" rx="7"/>
-  </g>
-  <g fill="#cbd3dc" font-family="DejaVu Sans Mono" font-size="16">
-    <text x="773" y="92">runtime</text>
-    <text x="773" y="166">app packs</text>
-    <text x="773" y="240">native modules</text>
-  </g>
-  <path d="M941 86h31v148h-31M972 160h38" fill="none" stroke="#667484" stroke-width="2"/>
-  <path d="m1003 154 7 6-7 6" fill="none" stroke="#667484" stroke-width="2"/>
-  <rect x="1030" y="123" width="110" height="74" rx="8" fill="#edbd59"/>
-  <text x="1085" y="166" text-anchor="middle" fill="#10151b" font-family="DejaVu Sans Mono" font-size="18">binary</text>
+  <desc id="description">Wippy Builder wordmark with a gold square on a dark background.</desc>
+  <rect width="1200" height="240" rx="12" fill="#10151b"/>
+  <rect x="64" y="76" width="88" height="88" rx="10" fill="#edbd59"/>
+  <text x="200" y="145" fill="#f0f3f6" font-family="DejaVu Sans" font-size="68" font-weight="bold">Wippy Builder</text>
 </svg>
