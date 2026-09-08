@@ -227,6 +227,9 @@ func PackRoot(path, toolchain, version string) error {
 	}
 	parts := strings.Split(p.Module, "/")
 	output := filepath.Join(filepath.Dir(path), p.Path)
+	if output == path {
+		return fmt.Errorf("pack output overlaps the build manifest")
+	}
 	if err = os.MkdirAll(filepath.Dir(output), 0755); err != nil {
 		return err
 	}

@@ -3,13 +3,13 @@
 Assemble standalone Wippy applications from a pinned runtime, application packs,
 and native Go components.
 
-The assembler builds Bee and an unrelated hello fixture through the same manifest.
-Source-free boot, Hub protocol updates, restart and base/bootstrap modes have local
-acceptance checks and GitHub CI; there is no stable release yet.
-The runtime boot and deployment APIs are being prepared upstream; this repository
-must consume those APIs rather than maintain a second runtime or Hub resolver.
+Bee and the hello example use the same build path. Local acceptance tests cover
+source-free boot, Hub updates, restart and base/bootstrap modes. GitHub CI runs
+these checks. The runtime host APIs are implemented in pending upstream PRs
+[667](https://github.com/wippyai/runtime/pull/667) and
+[668](https://github.com/wippyai/runtime/pull/668). There is no stable release yet.
 
-## Intended application manifest
+## Application manifest
 
 An application selects its executable name, exact runtime revision and build
 profile, versioned Hub root, bundled dependency graph, native component factories,
@@ -18,9 +18,8 @@ Native components are compiled into the executable. They retain normal Wippy
 registration, typed module declarations, scheduler integration and host-selected
 permission checks.
 
-The embedded pack is a deployment input. Starting an already initialized
-application uses its installed lock graph, including explicit Hub updates; it
-must never overwrite an updated application just because a bundled pack exists.
+The embedded packs seed the first deployment. Later launches use the installed
+lock graph and preserve Hub updates.
 
 See the [application and native module SDK](docs/SDK.md) for pack configuration,
 boot registration, typed modules, filesystem events and argument passing, and
@@ -44,13 +43,14 @@ Go module versions with exported component factories. See
 
 After intentionally regenerating input packs, `dist/wippy-builder seal MANIFEST`
 refreshes their checksums. Normal builds only verify checksums. A build emits the
-executable, JSON provenance, module files, license inventory and runtime patches. `WIPPY_BUILD_RUNTIME_REPOSITORY` may
-select a local Git mirror for development; the builder still checks out the exact
-manifest commit and never consumes the mirror's working files.
+executable, JSON provenance, module files, license inventory and runtime patches.
+`WIPPY_BUILD_RUNTIME_REPOSITORY` may select a local Git mirror for development;
+the builder checks out the manifest's exact commit into a temporary directory.
 
 The composite GitHub action accepts `manifest` and `output` inputs. Consumers
-should pin this repository to a reviewed commit. Bee supplies a consuming Linux amd64 workflow with foundation/native acceptance,
-offline PTY checks, archives and tag-triggered draft releases.
+should pin this repository to a reviewed commit. Bee's Linux amd64 workflow runs
+Lua and native module tests, offline PTY checks, packaging and tag-triggered draft
+releases.
 
 Use `dist/wippy-builder toolchain MANIFEST --output dist/wippy` to build the same native
 component selection for source linting, tests and pack generation. This step does
@@ -64,8 +64,8 @@ fetch/checksum configuration and uses normal Git credential handling.
 `dist/wippy-builder package dist/my-app --output dist/my-app-linux-amd64.tar.gz`
 collects the executable, manifest provenance, effective Go module graph, dependency
 license inventory and runtime patches, and emits a SHA-256 checksum file. Archive
-ownership and timestamps are normalized. This does not promise identical binaries:
-application pack timestamps and the native C toolchain also affect build bytes.
+ownership and timestamps are normalized. Binary bytes also depend on application
+pack timestamps and the native C toolchain.
 
 The inventory includes the Go license and available module license files; modules
 without root license files are explicitly listed for downstream review. Application
@@ -78,8 +78,7 @@ remain plain text. `wippy-builder pack MANIFEST --toolchain PATH --version VERSI
 prepares a self-contained source pack and seals its checksum; dependency packs
 are supplied independently in a multi-module manifest.
 
-The artifact set has one named definition shared by build validation, provenance
-and packaging. Packaging snapshots every file, verifies the recorded hashes, then
-writes the archive atomically. Provenance records the assembler's Git revision and
-whether its source was modified. Native imports are checked against the Go module
-that actually owns them, including nested-module and replacement rejection.
+Packaging snapshots every file, verifies the recorded hashes, then writes the
+archive atomically. Provenance records the assembler's Git revision and whether
+its source was modified. Native imports are checked against the Go module that
+owns them, including nested modules and replacements.

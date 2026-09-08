@@ -1,79 +1,77 @@
-# Standalone application implementation requirements
+# Implementation and release status
 
-Status: development implementation with tested Linux assembly; not a stable released interface.
+The development implementation assembles Bee and a separate hello application
+on Linux amd64. Both use the same manifest and runtime host API.
 
-Implemented: pinned assembler and toolchain action, source-free Bee/hello boot,
-base/bootstrap modes, canonical staged Hub updates, native I/O events and draft
-release archives. The Hub protocol fixture verifies root and dependency updates
-and retained selections. Explicit semantic native-version requirements, additional
-platform acceptance, Bee Hub publication and complete upstream notice review
-remain pending. Lint currently gates native module API/type compatibility.
+## Ownership and repository layout
 
-## Ownership
+| Location | Responsibility |
+|---|---|
+| `cmd/wippy-builder` | Cobra commands, flags, help and status output |
+| `internal/assemble` | Manifest validation, source preparation, Go builds and packaging |
+| `examples/hello` | Standalone application and executable acceptance fixture |
+| `action.yml` | Reusable GitHub action |
+| `.github/workflows/check.yml` | Builder tests, application acceptance and archive verification |
+| Runtime `application` package | Embedded deployment, command dispatch, updates and recovery |
+| Application repository | Lua/UI code, native extensions, permissions and acceptance tests |
 
-- Runtime: public application boot, component composition, pack/deployment loading,
-  normal Hub resolution and updates, source introspection, shutdown and recovery.
-- Builder: validated manifest, pinned sources and Go dependency graph, generated
-  small entry point and embedded assets, build provenance and release packaging.
-- Application: Lua source and published package identity, native extensions,
-  workspace data policy, admission and permissions, application acceptance tests.
+The generated entry point calls `application.Run`. Development toolchains call
+`cmd.ExecuteWithOptions`. Runtime boot components register native services and
+typed Lua modules. See the [SDK guide](SDK.md) for the authoring APIs and their
+revision requirements.
 
-Bee is the first consumer. The builder must also build a second, unrelated
-fixture application through exactly the same manifest and execution path.
-Do not embed Bee-specific names, startup code or modules in builder logic.
+## Build inputs and outputs
 
-## Distribution and updates
+A manifest selects an exact runtime commit, Go toolchain, build tags,
+checksummed patches, versioned application packs and native component factories.
+The assembler copies pack and patch inputs into staging and verifies their
+hashes before invoking build tools. Git operates on a temporary checkout. Go
+workspaces and ambient build flags are disabled.
 
-The executable contains every application pack needed for first offline boot.
-Packs preserve canonical module IDs, versions, metadata and dependency ownership.
-Generated code calls a public runtime API; it does not copy private CLI boot code.
+Go's selected package owner and module version must match each native pin.
+The build emits an executable, provenance, effective Go module files, available
+dependency notices and runtime patch sources. Packaging verifies a snapshot of
+that artifact set and writes an archive and checksum. Archive metadata is
+normalized; binary bytes also depend on pack timestamps and the C toolchain.
 
-A fresh deployment is seeded atomically from the embedded graph. Existing state
-is validated and retained. A selected update is authoritative on later launches.
-Base mode retains an explicit bundled recovery option; bootstrap mode only seeds
-initial state. Recovery must not silently downgrade code against newer workspace
-migrations. Workspace databases and registry history remain separate.
+## Application deployment
 
-Updates use the normal Hub client, authentication, resolver, digest verification,
-lock format and admission boundaries. Failed download, verification or activation
-must leave the previous deployment usable. Native requirements are checked before
-activation; a Lua update cannot add a Go module. Native executable replacement
-has a separate restart boundary. Do not promise live core replacement.
+Embedded packs include the graph required for first boot. Packs retain their
+module identities, versions and dependency metadata. Initial boot creates a
+Wippy lock and vendor deployment; subsequent boots preserve installed selections.
 
-Keep application source introspection and canonical workspace replacements
-available. Source editing, package discovery and installation never grant
-application processes direct registry publication authority.
+The standalone `update` operation stages the selected deployment, invokes Wippy's
+Hub resolver and linter, verifies pack digests and activates the result after
+success. Failed updates retain the previous selection. The advanced
+`runtime update` command modifies the selected deployment directly.
 
-## Native I/O events
+Base mode exposes explicit embedded-code recovery with separate registry
+history. Bootstrap mode seeds initial state. Both preserve application databases;
+the application's migration checks govern compatibility with older code.
+Activation requires a restart. Native code changes require a new executable.
 
-Bee needs an MIT-owned native module, initially supporting filesystem events.
-Evaluate github.com/syncthing/notify (MIT), pin its exact revision, preserve its
-license, and test its overflow and platform semantics before selecting it.
-Use Wippy module types, scheduler yields/channels, error kinds, process-owned
-resources and component lifecycle. No Lua callbacks from watcher goroutines.
+## Validation
 
-Subscribe using an explicitly authorized filesystem resource and contained
-relative path. Validate at the native boundary; import declarations do not grant
-access. Bound watches and event queues, support cancellation and automatic owner
-exit cleanup, and represent loss of synchronization explicitly. Filesystem
-notifications are hints requiring reconciliation, not a durable ordered log.
-Do not promise recursive or network-filesystem semantics without acceptance tests.
+`make check` runs Go race tests, vet and formatting checks. Tests cover manifest
+validation, generated source, input protection, exact native dependency ownership,
+atomic file writes, artifact tampering and archive metadata.
 
-## Build and release gates
+Executable acceptance covers source-free boot, exact argument forwarding,
+base/bootstrap behavior, Hub root and dependency updates, cold restart, base
+recovery and failed-update preservation. CI runs first-boot acceptance with
+networking disabled.
 
-- Exact runtime revision, checksummed patches if temporarily required, locked Go
-  dependencies and toolchain; no ambient Go workspace or dirty adjacent checkout.
-- A small manifest and one reusable GitHub build path for applications.
-- Local Makefile build, unit and integration checks used by CI.
-- Native target builds with required C toolchains; validate Linux first and add
-  macOS/ARM targets only with actual builds and platform tests. Windows needs its
-  own terminal/application acceptance before being advertised.
-- Offline first boot from a directory without source or preinstalled Wippy.
-- Native component import, behavior, denied access and process-exit cleanup.
-- Real Hub update to a newer test package, cold restart, embedded version retained
-  according to mode, failed update recovery, incompatible native requirement denial.
-- Bee source/pack acceptance plus standalone terminal, persistence and recovery.
-- Release archives, checksums, build provenance, dependency/license notices, and
-  GitHub release workflow with publication permissions scoped to the release job.
-- Runtime changes prepared as focused PRs, preserving MPL-2.0 notices. Builder
-  and Bee-owned code are MIT. No prior-project comparisons in code or comments.
+Bee's consuming workflow adds typed Lua checks, filesystem permission and event
+tests, and desktop acceptance for Terminal, Settings recovery and F12. Version
+tags prepare draft releases. Builder and Bee-owned code are MIT; runtime patches
+retain MPL-2.0 headers and dependencies retain their own licenses.
+
+## Remaining release work
+
+- Runtime host APIs are implemented in pending upstream PRs 667 and 668.
+- Native event adapters use revision-coupled engine APIs.
+- Update lint checks exports and Lua types; semantic native-version requirements
+  remain unimplemented.
+- macOS, Windows and additional architectures need builds and application tests.
+- Bee Hub publication and in-app installation remain unimplemented.
+- Stable distribution requires complete upstream license notices and review.

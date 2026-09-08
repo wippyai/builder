@@ -68,3 +68,21 @@ func TestRejectsDuplicateBuildInputs(t *testing.T) {
 		t.Fatal("accepted duplicate patch paths")
 	}
 }
+
+func TestPackCannotOverwriteManifest(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "wippy.build.json")
+	m := fixture()
+	m.Application.Packs[0].Path = filepath.Base(path)
+	must(t, WriteJSON(path, m))
+	before, err := os.ReadFile(path)
+	must(t, err)
+	err = PackRoot(path, filepath.Join(t.TempDir(), "missing-toolchain"), "")
+	if err == nil || err.Error() != "pack output overlaps the build manifest" {
+		t.Fatalf("expected overlap preflight, got %v", err)
+	}
+	after, err := os.ReadFile(path)
+	must(t, err)
+	if !slices.Equal(before, after) {
+		t.Fatal("pack changed its input manifest")
+	}
+}

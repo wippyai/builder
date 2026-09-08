@@ -2,10 +2,11 @@
 
 This is the authoring contract for the pinned development runtime. The runtime
 owns the Go APIs, Lua types, scheduler and boot lifecycle. Builder selects and
-compiles those APIs; it defines no alternative module or process system.
+compiles those APIs.
 The application host is pending upstream in runtime PRs
 [667](https://github.com/wippyai/runtime/pull/667) and
-[668](https://github.com/wippyai/runtime/pull/668). This is not a stable Go ABI.
+[668](https://github.com/wippyai/runtime/pull/668). Go integrations require the
+documented runtime revision.
 
 ## Choose what goes into a pack
 
@@ -19,14 +20,13 @@ The application host is pending upstream in runtime PRs
 | Runtime revision, patches and build tags | `wippy.build.json` `runtime` | New executable |
 | User preferences and application databases | Application-owned persistence | Preserved across code updates |
 
-UI composition is application code and registry configuration. There is no
-builder-specific `ui` setting. Include the desired UI in the pack and declare
+UI composition uses application code and registry configuration. Include the
+desired UI in the pack and declare
 its normal imports, processes and resources. For Bee, preserve the host's app
 admission boundary when changing the bundled app selection.
 
-Packing uses the canonical Wippy `pack` command. Its `wippy.yaml` configuration
-selects embedded assets and publishable configuration; the builder does not
-serialize the publisher's entire runtime configuration. For example, a source
+Packing uses Wippy's `pack` command. Its `wippy.yaml` configuration selects
+embedded assets and publishable configuration. For example, a source
 application can opt in to shipping its shutdown defaults:
 
 ```yaml
@@ -47,7 +47,7 @@ precedence over pack settings. Credentials and machine-specific paths belong in
 host configuration. Application-specific settings need their own typed decoder.
 
 `pack` prepares one self-contained source root. A manifest with multiple modules
-supplies independently prepared canonical packs for its complete dependency graph.
+supplies independently prepared packs for its complete dependency graph.
 
 ## Compile a native module
 
@@ -135,22 +135,22 @@ The host must grant both `fs.get` and `ioevents.watch` for that resource. The
 native boundary resolves the registered filesystem and validates relative paths
 inside its root. The current backend requires `api/fs.HostPathFS`, watches one
 directory, bounds watches and queues, and emits change hints plus rescan events.
-Unsupported providers return an error. Notifications are not a durable log.
+Unsupported providers return an error. Consumers must tolerate lost and coalesced
+notifications. If runtime message retention overflows, the channel closes with an
+error and the producer stops; reopen the watch and rescan to recover.
 
 The event adapter currently uses exported runtime implementation APIs:
 `runtime/lua/engine` subscriptions, subscription frames and channel types,
 `runtime/lua/engine/value` userdata, and `runtime/security.IsAllowed`. These are
-**revision-coupled integration APIs**, not a separately stabilized SDK surface.
-Pin and test them with the selected runtime. Do not copy their implementation
-into a native package or builder.
+**revision-coupled integration APIs**. Pin and test them with the selected runtime.
 
 Yield blocking setup through the dispatcher. Route Go payloads through the
 runtime relay; construct Lua values only on the scheduler. Use subscription
 epochs and generations, bounded retention and process-owned cancellation. Test
 owner exit, stale delivery, denied permissions, overload and component shutdown.
 
-Attaching watching directly to `filesystem:watch()` is a possible runtime API
-extension, not an available method today. A canonical implementation needs an
+Attaching watching directly to `filesystem:watch()` requires a runtime API
+extension. Its design needs an
 optional provider capability, resource identity for authorization, defined
 unsupported-provider behavior and scheduler-owned cancellation. It should be
 reviewed in the runtime with provider and permission tests. Do not mutate the
@@ -179,8 +179,8 @@ Host flags precede the operation; application arguments follow `run`:
 ./dist/my-app runtime run --silent -- another-command argument
 ```
 
-Arguments are forwarded as Go argument slices through the canonical runtime
-CLI. There is no shell splitting or quoting layer. Executable acceptance covers
+Arguments are forwarded as Go argument slices through the runtime CLI.
+Executable acceptance covers
 empty values, newlines, Unicode, quotes, `--`, and host-looking application flags.
 
 Hub updates replace the selected pack graph, which later boots preserve. They
