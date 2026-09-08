@@ -3,8 +3,9 @@
 Assemble standalone Wippy applications from a pinned runtime, application packs,
 and native Go components.
 
-Implementation is in progress. The local builder and unrelated hello fixture
-have been built and run; there is no stable release yet.
+The assembler builds Bee and an unrelated hello fixture through the same manifest.
+Source-free boot, Hub protocol updates, restart and base/bootstrap modes have local
+acceptance checks and GitHub CI; there is no stable release yet.
 The runtime boot and deployment APIs are being prepared upstream; this repository
 must consume those APIs rather than maintain a second runtime or Hub resolver.
 
@@ -40,13 +41,13 @@ Go module versions with exported component factories. See
 
 After intentionally regenerating input packs, `python3 builder.py seal MANIFEST`
 refreshes their checksums. Normal builds only verify checksums. A build emits the
-executable and a JSON provenance record. `WIPPY_BUILD_RUNTIME_REPOSITORY` may
+executable, JSON provenance, module files, license inventory and runtime patches. `WIPPY_BUILD_RUNTIME_REPOSITORY` may
 select a local Git mirror for development; the builder still checks out the exact
 manifest commit and never consumes the mirror's working files.
 
 The composite GitHub action accepts `manifest` and `output` inputs. Consumers
-should pin this repository to a reviewed commit. Platform release workflows and
-full Bee/native-module acceptance are still being implemented.
+should pin this repository to a reviewed commit. Bee supplies a consuming Linux amd64 workflow with foundation/native acceptance,
+offline PTY checks, archives and tag-triggered draft releases.
 
 Use `builder.py toolchain MANIFEST --output dist/wippy` to build the same native
 component selection for source linting, tests and pack generation. This step does

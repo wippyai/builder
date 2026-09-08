@@ -1,6 +1,13 @@
 # Standalone application implementation requirements
 
-Status: implementation in progress, not a released interface.
+Status: development implementation with tested Linux assembly; not a stable released interface.
+
+Implemented: pinned assembler and toolchain action, source-free Bee/hello boot,
+base/bootstrap modes, canonical staged Hub updates, native I/O events and draft
+release archives. The Hub protocol fixture verifies root and dependency updates
+and retained selections. Explicit semantic native-version requirements, additional
+platform acceptance, Bee Hub publication and complete upstream notice review
+remain pending. Lint currently gates native module API/type compatibility.
 
 ## Ownership
 

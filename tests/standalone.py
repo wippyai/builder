@@ -30,4 +30,4 @@ with tempfile.TemporaryDirectory(prefix="wippy-standalone-") as temporary:
         raise SystemExit("Standalone runtime wrote application state into the caller directory")
     if not (state / "deployment" / "wippy.lock").is_file():
         raise SystemExit("Missing canonical deployment lock")
-print("Standalone source-free boot, restart and base recovery passed")
+print("Standalone source-free boot and restart passed; " + ("bootstrap rejects base recovery" if bootstrap else "base recovery passed"))
