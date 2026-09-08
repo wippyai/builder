@@ -3,179 +3,120 @@ package assemble
 
 import (
 	"archive/tar"
-	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
-	"strings"
 )
 
 type archiveFile struct{ Path, Name string }
 
-func archiveFiles(files []archiveFile, output string) (result error) {
-	if err := os.MkdirAll(filepath.Dir(output), 0755); err != nil {
-		return err
-	}
-	f, err := os.CreateTemp(filepath.Dir(output), ".archive-")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	gz := gzip.NewWriter(f)
-	tw := tar.NewWriter(gz)
-	defer func() {
-		if err := tw.Close(); result == nil {
-			result = err
-		}
-		if err := gz.Close(); result == nil {
-			result = err
-		}
-		if err := f.Close(); result == nil {
-			result = err
-		}
-		if result == nil {
-			result = os.Rename(f.Name(), output)
-		}
-	}()
+func archiveFiles(files []archiveFile, output string) error {
+	files = append([]archiveFile(nil), files...)
 	sort.Slice(files, func(i, j int) bool { return files[i].Name < files[j].Name })
-	for _, item := range files {
-		input, err := os.Open(item.Path)
-		if err != nil {
-			return err
+	return atomicFile(output, 0644, func(writer io.Writer) (result error) {
+		compressed := gzip.NewWriter(writer)
+		archive := tar.NewWriter(compressed)
+		defer func() { result = errors.Join(result, archive.Close(), compressed.Close()) }()
+		for _, file := range files {
+			if err := appendToArchive(archive, file); err != nil {
+				return err
+			}
 		}
-		info, err := input.Stat()
-		if err != nil {
-			input.Close()
-			return err
-		}
-		if !info.Mode().IsRegular() {
-			input.Close()
-			return fmt.Errorf("archive input must be a regular file")
-		}
-		mode := int64(0644)
-		if info.Mode()&0111 != 0 {
-			mode = 0755
-		}
-		if err = tw.WriteHeader(&tar.Header{Name: item.Name, Mode: mode, Size: info.Size(), Typeflag: tar.TypeReg}); err != nil {
-			input.Close()
-			return err
-		}
-		_, err = io.Copy(tw, input)
-		closeErr := input.Close()
-		if err != nil {
-			return err
-		}
-		if closeErr != nil {
-			return closeErr
-		}
-	}
-	return nil
+		return nil
+	})
 }
+func appendToArchive(archive *tar.Writer, file archiveFile) error {
+	input, err := os.Open(file.Path)
+	if err != nil {
+		return err
+	}
+	defer input.Close()
+	info, err := input.Stat()
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("archive input must be a regular file: %s", file.Path)
+	}
+	mode := int64(0644)
+	if info.Mode()&0111 != 0 {
+		mode = 0755
+	}
+	header := &tar.Header{Name: file.Name, Mode: mode, Size: info.Size(), Typeflag: tar.TypeReg}
+	if err = archive.WriteHeader(header); err != nil {
+		return err
+	}
+	_, err = io.Copy(archive, input)
+	return err
+}
+
+// Package verifies a frozen artifact set before producing the release archive.
 func Package(binary, output string) error {
+	binary, err := filepath.Abs(binary)
+	if err != nil {
+		return err
+	}
+	output, err = filepath.Abs(output)
+	if err != nil {
+		return err
+	}
+	inputs := artifactsFor(binary)
+	for _, file := range inputs.all() {
+		if file.Path == output || file.Path == output+".sha256" {
+			return fmt.Errorf("archive output overlaps %s input", file.Name)
+		}
+	}
+	stage, err := os.MkdirTemp("", "wippy-package-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(stage)
+	frozen, err := inputs.snapshot(stage)
+	if err != nil {
+		return err
+	}
+	provenance, err := readProvenance(frozen.Provenance.Path)
+	if err != nil {
+		return err
+	}
+	if err = frozen.verify(provenance.Artifacts); err != nil {
+		return err
+	}
 	var files []archiveFile
-	for _, suffix := range []string{"", ".provenance.json", ".LICENSES.txt", ".go.mod", ".go.sum", ".runtime-patches.tar.gz"} {
-		path := binary + suffix
-		info, err := os.Stat(path)
-		if err != nil {
-			return err
-		}
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("missing binary build sidecar %s", path)
-		}
-		files = append(files, archiveFile{path, filepath.Base(path)})
-	}
-	data, err := os.ReadFile(binary + ".provenance.json")
-	if err != nil {
-		return err
-	}
-	var p Provenance
-	if err = json.Unmarshal(data, &p); err != nil {
-		return err
-	}
-	sum, err := Digest(binary)
-	if err != nil {
-		return err
-	}
-	if sum != p.BinarySHA256 {
-		return fmt.Errorf("binary does not match provenance")
+	for _, file := range frozen.all() {
+		files = append(files, archiveFile{Path: file.Path, Name: filepath.Base(file.Path)})
 	}
 	if err = archiveFiles(files, output); err != nil {
 		return err
 	}
-	sum, err = Digest(output)
+	sum, err := Digest(output)
 	if err != nil {
 		return err
 	}
 	return atomicWrite(output+".sha256", []byte(sum+"  "+filepath.Base(output)+"\n"), 0644)
 }
-func licenseNotices(source string, env []string) ([]byte, error) {
-	encoded, err := capture(source, env, "go", "list", "-m", "-json", "all")
+func readProvenance(path string) (Provenance, error) {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return Provenance{}, err
 	}
-	decoder := json.NewDecoder(bytes.NewReader(encoded))
-	var modules []goModule
-	for {
-		var m goModule
-		err := decoder.Decode(&m)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		modules = append(modules, m)
+	var record Provenance
+	if err = json.Unmarshal(data, &record); err != nil {
+		return Provenance{}, err
 	}
-	sort.Slice(modules, func(i, j int) bool { return modules[i].Path < modules[j].Path })
-	goroot, err := capture(source, env, "go", "env", "GOROOT")
-	if err != nil {
-		return nil, err
+	if record.Schema != 1 || record.Manifest == nil {
+		return Provenance{}, fmt.Errorf("invalid build provenance")
 	}
-	license, err := os.ReadFile(filepath.Join(strings.TrimSpace(string(goroot)), "LICENSE"))
-	if err != nil {
-		return nil, err
+	if record.Mode != "application" && record.Mode != "toolchain" {
+		return Provenance{}, fmt.Errorf("invalid build provenance mode")
 	}
-	var notices bytes.Buffer
-	notices.WriteString("Third-party license inventory for this build.\n\nGo toolchain and standard library\n")
-	notices.Write(license)
-	var missing []string
-	pattern := regexp.MustCompile(`^(LICENSE|LICENCE|COPYING|NOTICE|COPYRIGHT)([._-]|$)`)
-	for _, m := range modules {
-		if m.Replace != nil {
-			m = *m.Replace
-		}
-		if m.Dir == "" {
-			continue
-		}
-		files, err := os.ReadDir(m.Dir)
-		if err != nil {
-			return nil, err
-		}
-		found := false
-		for _, file := range files {
-			if file.Type().IsRegular() && pattern.MatchString(strings.ToUpper(file.Name())) {
-				if !found {
-					fmt.Fprintf(&notices, "\n%s@%s\n", m.Path, m.Version)
-				}
-				found = true
-				data, err := os.ReadFile(filepath.Join(m.Dir, file.Name()))
-				if err != nil {
-					return nil, err
-				}
-				fmt.Fprintf(&notices, "\n%s\n%s\n", file.Name(), data)
-			}
-		}
-		if !found {
-			missing = append(missing, m.Path)
-		}
+	if err = record.Manifest.Validate(); err != nil {
+		return Provenance{}, fmt.Errorf("provenance manifest: %w", err)
 	}
-	if len(missing) > 0 {
-		fmt.Fprintf(&notices, "\nModules without a root license file; consult their source distributions:\n%s\n", strings.Join(missing, "\n"))
-	}
-	return notices.Bytes(), nil
+	return record, nil
 }

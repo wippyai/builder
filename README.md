@@ -26,8 +26,8 @@ See [implementation requirements](docs/IMPLEMENTATION.md).
 
 ## Local use
 
-Go, Git and a C compiler are required. The assembler uses only the Go standard library
-and selects the runtime toolchain pinned by the application manifest.
+Go, Git and a C compiler are required. The assembler uses Wippy's Cobra CLI library
+and the Go standard library, and selects the runtime toolchain pinned by the manifest.
 
 ```sh
 make check tools
@@ -75,3 +75,9 @@ The CLI emits terminal-aware status colors and honors `NO_COLOR`. Redirected log
 remain plain text. `wippy-builder pack MANIFEST --toolchain PATH --version VERSION`
 prepares a self-contained source pack and seals its checksum; dependency packs
 are supplied independently in a multi-module manifest.
+
+The artifact set has one named definition shared by build validation, provenance
+and packaging. Packaging snapshots every file, verifies the recorded hashes, then
+writes the archive atomically. Provenance records the assembler's Git revision and
+whether its source was modified. Native imports are checked against the Go module
+that actually owns them, including nested-module and replacement rejection.

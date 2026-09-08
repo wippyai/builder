@@ -2,10 +2,12 @@
 package main
 
 import (
-	"flag"
+	"errors"
 	"fmt"
-	"github.com/wippyai/builder/internal/assemble"
 	"os"
+
+	"github.com/spf13/cobra"
+	"github.com/wippyai/builder/internal/assemble"
 )
 
 func color(text, code string) string {
@@ -15,48 +17,57 @@ func color(text, code string) string {
 	}
 	return text
 }
+func newCommand() *cobra.Command {
+	root := &cobra.Command{Use: "wippy-builder", Short: "Assemble native Wippy applications", SilenceErrors: true, SilenceUsage: true}
+	root.AddCommand(newBuildCommand(false), newBuildCommand(true), newPackCommand(), newSealCommand(), newPackageCommand())
+	root.AddCommand(&cobra.Command{Use: "validate MANIFEST", Short: "Validate pinned assembly inputs", Args: cobra.ExactArgs(1), RunE: func(_ *cobra.Command, args []string) error { _, err := assemble.ReadManifest(args[0]); return err }})
+	return root
+}
+func newBuildCommand(toolchain bool) *cobra.Command {
+	name, description := "build", "Build a standalone application"
+	if toolchain {
+		name, description = "toolchain", "Build the selected native Wippy toolchain"
+	}
+	var output string
+	command := &cobra.Command{Use: name + " MANIFEST", Short: description, Args: cobra.ExactArgs(1), RunE: func(command *cobra.Command, args []string) error {
+		if output == "" {
+			return errors.New("--output is required")
+		}
+		fmt.Fprintln(command.ErrOrStderr(), color(description+"…", "36"))
+		return assemble.Build(args[0], output, toolchain)
+	}}
+	command.Flags().StringVarP(&output, "output", "o", "", "Executable output path")
+	return command
+}
+func newPackCommand() *cobra.Command {
+	var toolchain, version string
+	command := &cobra.Command{Use: "pack MANIFEST", Short: "Pack a self-contained application and record its checksum", Args: cobra.ExactArgs(1), RunE: func(_ *cobra.Command, args []string) error { return assemble.PackRoot(args[0], toolchain, version) }}
+	command.Flags().StringVar(&toolchain, "toolchain", "wippy", "Native Wippy toolchain path")
+	command.Flags().StringVar(&version, "version", "", "Application version")
+	return command
+}
+func newSealCommand() *cobra.Command {
+	var version, mode string
+	command := &cobra.Command{Use: "seal MANIFEST", Short: "Record checksums for intentionally regenerated packs", Args: cobra.ExactArgs(1), RunE: func(_ *cobra.Command, args []string) error { return assemble.Seal(args[0], version, mode) }}
+	command.Flags().StringVar(&version, "version", "", "Root application version")
+	command.Flags().StringVar(&mode, "mode", "", "Embedded deployment mode: base or bootstrap")
+	return command
+}
+func newPackageCommand() *cobra.Command {
+	var output string
+	command := &cobra.Command{Use: "package BINARY", Short: "Verify and archive a complete build", Args: cobra.ExactArgs(1), RunE: func(_ *cobra.Command, args []string) error {
+		if output == "" {
+			return errors.New("--output is required")
+		}
+		return assemble.Package(args[0], output)
+	}}
+	command.Flags().StringVarP(&output, "output", "o", "", "Release archive path")
+	return command
+}
 func execute(args []string) error {
-	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
-		fmt.Println("Wippy Builder — assemble native Wippy applications\n\nCommands: build, toolchain, pack, seal, validate, package\nUsage: wippy-builder COMMAND INPUT [options]\n\nBuild:   wippy-builder build wippy.build.json --output dist/application\nPack:    wippy-builder pack wippy.build.json --toolchain ./dist/wippy\nArchive: wippy-builder package dist/application --output dist/application.tar.gz")
-		return nil
-	}
-	if len(args) < 2 {
-		return fmt.Errorf("usage: wippy-builder build|toolchain|pack|seal|validate|package INPUT [--output PATH] [--toolchain PATH] [--version VERSION] [--mode base|bootstrap]")
-	}
-	operation, input := args[0], args[1]
-	flags := flag.NewFlagSet(operation, flag.ContinueOnError)
-	output := flags.String("output", "", "output path")
-	toolchain := flags.String("toolchain", "wippy", "native Wippy toolchain")
-	version := flags.String("version", "", "root pack version")
-	mode := flags.String("mode", "", "embedded deployment mode")
-	if err := flags.Parse(args[2:]); err != nil {
-		return err
-	}
-	if flags.NArg() != 0 {
-		return fmt.Errorf("unexpected arguments")
-	}
-	switch operation {
-	case "build", "toolchain":
-		if *output == "" {
-			return fmt.Errorf("--output is required")
-		}
-		fmt.Fprintln(os.Stderr, color("Building pinned "+operation+"…", "36"))
-		return assemble.Build(input, *output, operation == "toolchain")
-	case "validate":
-		_, err := assemble.ReadManifest(input)
-		return err
-	case "seal":
-		return assemble.Seal(input, *version, *mode)
-	case "pack":
-		return assemble.PackRoot(input, *toolchain, *version)
-	case "package":
-		if *output == "" {
-			return fmt.Errorf("--output is required")
-		}
-		return assemble.Package(input, *output)
-	default:
-		return fmt.Errorf("unknown command %q", operation)
-	}
+	command := newCommand()
+	command.SetArgs(args)
+	return command.Execute()
 }
 func main() {
 	if err := execute(os.Args[1:]); err != nil {

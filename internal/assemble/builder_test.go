@@ -80,13 +80,16 @@ func TestChecksumBeforeTools(t *testing.T) {
 func TestArchiveDeterminismAndTampering(t *testing.T) {
 	root := t.TempDir()
 	binary := filepath.Join(root, "hello")
-	must(t, os.WriteFile(binary, []byte("binary"), 0755))
-	sum, err := Digest(binary)
-	must(t, err)
-	must(t, WriteJSON(binary+".provenance.json", Provenance{BinarySHA256: sum}))
-	for _, suffix := range []string{".LICENSES.txt", ".go.mod", ".go.sum", ".runtime-patches.tar.gz"} {
-		must(t, os.WriteFile(binary+suffix, []byte("sidecar"), 0644))
+	artifacts := artifactsFor(binary)
+	m := fixture()
+	for _, file := range artifacts.recorded() {
+		must(t, os.WriteFile(file.Path, []byte("content"), 0644))
 	}
+	must(t, os.Chmod(binary, 0755))
+	hashes, err := artifacts.hashes()
+	must(t, err)
+	provenance := Provenance{Schema: 1, Mode: "application", Manifest: &m, Artifacts: hashes}
+	must(t, WriteJSON(artifacts.Provenance.Path, provenance))
 	first, second := filepath.Join(root, "first.tar.gz"), filepath.Join(root, "second.tar.gz")
 	must(t, Package(binary, first))
 	must(t, os.Chtimes(binary, time.Now(), time.Now()))
@@ -97,6 +100,16 @@ func TestArchiveDeterminismAndTampering(t *testing.T) {
 	must(t, err)
 	if !bytes.Equal(a, b) {
 		t.Fatal("archive depends on host metadata")
+	}
+	if err = Package(binary, binary); err == nil {
+		t.Fatal("archive overwrote its binary input")
+	}
+	for _, file := range artifacts.recorded() {
+		must(t, os.WriteFile(file.Path, []byte("tampered"), 0644))
+		if err = Package(binary, second); err == nil {
+			t.Fatalf("tampered %s accepted", file.Name)
+		}
+		must(t, os.WriteFile(file.Path, []byte("content"), 0644))
 	}
 	must(t, os.WriteFile(binary, []byte("tampered"), 0755))
 	if err = Package(binary, second); err == nil || !strings.Contains(err.Error(), "provenance") {
@@ -207,5 +220,18 @@ func TestHub(t *testing.T) {
 	}
 	if !passed {
 		t.Fatalf("Hub binary acceptance did not run:\n%s", data)
+	}
+}
+
+func TestSemanticVersions(t *testing.T) {
+	for _, version := range []string{"1.0.0", "0.1.0-dev", "1.2.3-rc.1+build.001", "0.0.0-20260908001447-70917fa75697"} {
+		if !matches(versionPattern, version) {
+			t.Errorf("valid version rejected: %s", version)
+		}
+	}
+	for _, version := range []string{"01.0.0", "1.0.0-01", "1.0.0-rc..1", "1.0.0+", "1.0.0+build..1", "1.0"} {
+		if matches(versionPattern, version) {
+			t.Errorf("invalid version accepted: %s", version)
+		}
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -59,8 +60,27 @@ func local(path string) bool {
 	return filepath.IsLocal(path) && !strings.ContainsRune(path, 0) && !strings.Contains(strings.ReplaceAll(path, "\\", "/"), "../")
 }
 
-const versionPattern = `[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?`
+const numberPattern = `(?:0|[1-9][0-9]*)`
+const prereleasePattern = `(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)`
+const versionPattern = numberPattern + `\.` + numberPattern + `\.` + numberPattern +
+	`(?:-` + prereleasePattern + `(?:\.` + prereleasePattern + `)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?`
 const modulePattern = `[a-z][a-z0-9-]*/[a-z][a-z0-9-]*`
+
+func validImportPath(path string) bool {
+	if !matches(`[A-Za-z0-9._~/-]+`, path) {
+		return false
+	}
+	parts := strings.Split(path, "/")
+	if !strings.Contains(parts[0], ".") || !matches(`[A-Za-z0-9][A-Za-z0-9.-]*`, parts[0]) {
+		return false
+	}
+	for _, part := range parts {
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
+	}
+	return true
+}
 
 func ReadManifest(path string) (*Manifest, error) {
 	data, err := os.ReadFile(path)
@@ -86,7 +106,11 @@ func (m *Manifest) Validate() error {
 		return fmt.Errorf("invalid schema or executable name")
 	}
 	r := m.Runtime
-	if !strings.HasPrefix(r.Repository, "https://") || !matches(`[0-9a-f]{40}`, r.Commit) || !matches(`[0-9]+\.[0-9]+\.[0-9]+`, r.Go) || r.Tags == nil {
+	repository, err := url.Parse(r.Repository)
+	if err != nil || repository.Scheme != "https" || repository.Hostname() == "" || repository.User != nil || repository.RawQuery != "" || repository.Fragment != "" {
+		return fmt.Errorf("runtime repository must be an HTTPS Git URL without credentials, query or fragment")
+	}
+	if !matches(`[0-9a-f]{40}`, r.Commit) || !matches(numberPattern+`\.`+numberPattern+`\.`+numberPattern, r.Go) || r.Tags == nil {
 		return fmt.Errorf("runtime requires HTTPS source, exact commit, Go version and tags")
 	}
 	for _, tag := range r.Tags {
@@ -99,6 +123,13 @@ func (m *Manifest) Validate() error {
 			return fmt.Errorf("patch requires local path and SHA-256")
 		}
 	}
+	paths := make(map[string]bool)
+	for _, patch := range r.Patches {
+		if paths[filepath.Clean(patch.Path)] {
+			return fmt.Errorf("duplicate build input path %q", patch.Path)
+		}
+		paths[filepath.Clean(patch.Path)] = true
+	}
 	app := m.Application
 	if !matches(modulePattern, app.Module) || app.Command == "" || (app.Mode != "base" && app.Mode != "bootstrap") {
 		return fmt.Errorf("invalid application identity, command or mode")
@@ -108,6 +139,10 @@ func (m *Manifest) Validate() error {
 		if !matches(modulePattern, p.Module) || !matches(`v?`+versionPattern, p.Version) || !local(p.Path) || !matches(`[0-9a-f]{64}`, p.SHA256) || modules[p.Module] {
 			return fmt.Errorf("invalid or duplicate pack %q", p.Module)
 		}
+		if paths[filepath.Clean(p.Path)] {
+			return fmt.Errorf("duplicate build input path %q", p.Path)
+		}
+		paths[filepath.Clean(p.Path)] = true
 		modules[p.Module] = true
 	}
 	if !modules[app.Module] {
@@ -120,7 +155,7 @@ func (m *Manifest) Validate() error {
 	}
 	modules = map[string]bool{}
 	for _, n := range m.Native {
-		if !matches(`[A-Za-z0-9._~/-]+`, n.Module) || !strings.Contains(n.Module, ".") || modules[n.Module] || !matches(`v`+versionPattern, n.Version) || !matches(`[A-Z][A-Za-z0-9_]*`, n.Factory) || !matches(`[A-Za-z0-9._~/-]+`, n.Package) || (n.Package != n.Module && !strings.HasPrefix(n.Package, n.Module+"/")) {
+		if !validImportPath(n.Module) || modules[n.Module] || !matches(`v`+versionPattern, n.Version) || !matches(`[A-Z][A-Za-z0-9_]*`, n.Factory) || !validImportPath(n.Package) || (n.Package != n.Module && !strings.HasPrefix(n.Package, n.Module+"/")) {
 			return fmt.Errorf("invalid or duplicate native component %q", n.Module)
 		}
 		modules[n.Module] = true
@@ -173,6 +208,7 @@ func PackRoot(path, toolchain, version string) error {
 		return fmt.Errorf("pack requires one source root; prepare dependency packs independently")
 	}
 	p := m.Application.Packs[0]
+	p.Version = strings.TrimPrefix(p.Version, "v")
 	if version != "" {
 		p.Version = strings.TrimPrefix(version, "v")
 	}
