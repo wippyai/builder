@@ -43,8 +43,8 @@ func setEnv(env []string, key, value string) []string {
 	return append(out, key+"="+value)
 }
 
-// Preserve credentials and proxy settings, but never inherit repository handles
-// from a parent Git hook or workspace. Go's Git subprocesses use this too.
+// gitEnvironment removes parent repository handles while preserving credentials
+// and proxy settings. Go's Git subprocesses use this environment too.
 func gitEnvironment(env []string) []string {
 	if env == nil {
 		env = os.Environ()

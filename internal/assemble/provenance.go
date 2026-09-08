@@ -8,7 +8,7 @@ import (
 )
 
 // Provenance binds the manifest, assembler identity and every release artifact.
-// Artifact keys describe purposes, not filenames, so output names may vary.
+// Artifact keys describe each file's purpose and allow output names to vary.
 type Provenance struct {
 	Schema    int               `json:"schema"`
 	Mode      string            `json:"mode"`

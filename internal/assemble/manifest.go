@@ -194,7 +194,7 @@ func Seal(path, version, mode string) error {
 }
 
 // PackRoot creates a source snapshot with a published identity. Multi-module
-// applications supply independently prepared canonical packs to Build instead.
+// applications supply independently prepared packs to Build.
 func PackRoot(path, toolchain, version string) error {
 	path, err := filepath.Abs(path)
 	if err != nil {

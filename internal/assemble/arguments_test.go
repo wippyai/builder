@@ -12,8 +12,8 @@ import (
 	"time"
 )
 
-// This is an executable acceptance test, not a source-generation assertion:
-// argv crosses the application host, canonical CLI and Lua process boundary.
+// TestArguments checks argv through the assembled application's host, CLI and
+// Lua process boundary.
 func TestArguments(t *testing.T) {
 	binary := os.Getenv("WIPPY_TEST_BINARY")
 	if binary == "" {

@@ -43,8 +43,8 @@ func prepareDependencies(source string, env []string, m *Manifest) error {
 	return run(source, env, "go", "mod", "verify")
 }
 
-// Verify the module that actually owns the import. A matching textual prefix
-// does not establish ownership when a repository contains nested Go modules.
+// verifyNativePackage checks the package's resolved module owner and version,
+// including imports from repositories containing nested modules.
 func verifyNativePackage(component Native, selected goPackage) error {
 	module := selected.Module
 	if selected.ImportPath != component.Package || module == nil || module.Path != component.Module || module.Version != component.Version || module.Replace != nil {
