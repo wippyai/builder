@@ -7,7 +7,7 @@ registration. Follow the [Wippy code of conduct](https://github.com/wippyai/.git
 ## Development
 
 Install the Go version in `go.mod`. Application assembly also needs Git and a C
-compiler. Use the Makefile:
+compiler. Install ShellCheck for workflow validation. Use the Makefile:
 
 ```sh
 make check

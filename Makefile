@@ -12,6 +12,7 @@ ACTIONLINT ?= go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 GITLEAKS ?= go run github.com/zricethezav/gitleaks/v8@v8.30.1
 .PHONY: repository-check
 repository-check:
+	@command -v shellcheck >/dev/null || { echo 'Install ShellCheck to validate workflow scripts.' >&2; exit 1; }
 	$(ACTIONLINT)
 	$(GITLEAKS) git --log-opts=--all --redact --no-banner
 	$(GITLEAKS) dir --redact --no-banner
