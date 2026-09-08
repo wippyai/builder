@@ -3,6 +3,7 @@
 """Build a standalone application from pinned Wippy and native components."""
 import argparse
 import hashlib
+import gzip
 import json
 import os
 from pathlib import Path
@@ -10,6 +11,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import tarfile
 
 
 class BuildError(ValueError):
@@ -94,6 +96,35 @@ def run(args, *, cwd=None, env=None):
 
 def go_string(value):
     return json.dumps(value, ensure_ascii=False)
+
+
+def license_notices(source, env):
+    encoded = subprocess.check_output(["go", "list", "-m", "-json", "all"], cwd=source, env=env, text=True)
+    decoder = json.JSONDecoder()
+    modules = []
+    while encoded.strip():
+        encoded = encoded.lstrip()
+        module, offset = decoder.raw_decode(encoded)
+        modules.append(module)
+        encoded = encoded[offset:]
+    goroot = subprocess.check_output(["go", "env", "GOROOT"], cwd=source, env=env, text=True).strip()
+    notices = ["Third-party license inventory for this build.\n", "\nGo toolchain and standard library\n", (Path(goroot) / "LICENSE").read_text()]
+    missing = []
+    for module in sorted(modules, key=lambda item: item["Path"]):
+        selected = module.get("Replace", module)
+        directory = selected.get("Dir")
+        if not directory:
+            continue
+        files = sorted(path for path in Path(directory).iterdir() if path.is_file() and re.match(r"^(LICENSE|LICENCE|COPYING|NOTICE|COPYRIGHT)([._-]|$)", path.name.upper()))
+        if not files:
+            missing.append(selected["Path"])
+            continue
+        notices.append("\n" + selected["Path"] + "@" + selected.get("Version", "runtime commit") + "\n")
+        for path in files:
+            notices.append("\n" + path.name + "\n" + path.read_text(errors="replace") + "\n")
+    if missing:
+        notices.append("\nModules without a root license file; consult their source distributions:\n" + "\n".join(missing) + "\n")
+    return "".join(notices)
 
 
 def generate_main(manifest):
@@ -190,6 +221,9 @@ def build(manifest_path, output, *, toolchain=False):
         (entry / "main.go").write_text(generate_toolchain(manifest) if toolchain else generate_main(manifest))
         if manifest.get("native"):
             run(["go", "mod", "tidy"], cwd=source, env=env)
+        for component in manifest.get("native", []):
+            selected = json.loads(subprocess.check_output(["go", "list", "-m", "-json", component["module"]], cwd=source, env=env))
+            require(selected.get("Version") == component["version"] and not selected.get("Replace"), f"native module selection changed: {component['module']}")
         run(["go", "mod", "verify"], cwd=source, env=env)
         binary = stage / manifest["name"]
         run(["go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-tags", ",".join(runtime["tags"]), "-o", str(binary), "./cmd/assembled"], cwd=source, env=env)
@@ -202,6 +236,32 @@ def build(manifest_path, output, *, toolchain=False):
         finally:
             pending_path.unlink(missing_ok=True)
         output.with_name(output.name+".provenance.json").write_text(json.dumps(provenance, indent=2)+"\n")
+        output.with_name(output.name+".LICENSES.txt").write_text(license_notices(source, env))
+        for name in ("go.mod", "go.sum"):
+            shutil.copyfile(source / name, output.with_name(output.name+"."+name))
+        archive_files([(base / patch["path"], f"{index}-"+Path(patch["path"]).name) for index, patch in enumerate(runtime.get("patches", []))], output.with_name(output.name+".runtime-patches.tar.gz"))
+
+
+def archive_files(files, output):
+    with output.open("wb") as raw, gzip.GzipFile(filename="", fileobj=raw, mode="wb", mtime=0) as compressed, tarfile.open(fileobj=compressed, mode="w") as archive:
+        for path, name in sorted(files, key=lambda item: item[1]):
+            info = archive.gettarinfo(str(path), arcname=name)
+            info.uid = info.gid = info.mtime = 0
+            info.uname = info.gname = ""
+            info.mode = 0o755 if os.access(path, os.X_OK) else 0o644
+            with path.open("rb") as stream:
+                archive.addfile(info, stream)
+
+
+def package(binary, output):
+    suffixes = ("", ".provenance.json", ".LICENSES.txt", ".go.mod", ".go.sum", ".runtime-patches.tar.gz")
+    files = [binary.with_name(binary.name + suffix) for suffix in suffixes]
+    require(all(path.is_file() for path in files), "binary and all build sidecars are required")
+    provenance = json.loads(files[1].read_text())
+    require(digest(binary) == provenance["binary_sha256"], "binary does not match provenance")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    archive_files([(path, path.name) for path in files], output)
+    output.with_name(output.name + ".sha256").write_text(digest(output) + "  " + output.name + "\n")
 
 
 def main():
@@ -217,9 +277,14 @@ def main():
     seal_parser.add_argument("manifest", type=Path)
     validate_parser = commands.add_parser("validate")
     validate_parser.add_argument("manifest", type=Path)
+    package_parser = commands.add_parser("package")
+    package_parser.add_argument("binary", type=Path)
+    package_parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     try:
-        if args.command == "build":
+        if args.command == "package":
+            package(args.binary, args.output)
+        elif args.command == "build":
             build(args.manifest, args.output)
         elif args.command == "toolchain":
             build(args.manifest, args.output, toolchain=True)

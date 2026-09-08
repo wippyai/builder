@@ -62,6 +62,22 @@ class ManifestTests(unittest.TestCase):
                 builder.build(path, Path(temporary) / "binary")
             self.assertFalse((Path(temporary) / "binary").exists())
 
+    def test_archive_is_stable_and_rejects_modified_binary(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binary = root / "hello"
+            binary.write_bytes(b"binary")
+            binary.with_name("hello.provenance.json").write_text(json.dumps({"binary_sha256": builder.digest(binary)}))
+            for suffix in (".LICENSES.txt", ".go.mod", ".go.sum", ".runtime-patches.tar.gz"):
+                binary.with_name("hello" + suffix).write_bytes(b"sidecar")
+            first, second = root / "first.tar.gz", root / "second.tar.gz"
+            builder.package(binary, first)
+            builder.package(binary, second)
+            self.assertEqual(first.read_bytes(), second.read_bytes())
+            binary.write_bytes(b"changed")
+            with self.assertRaisesRegex(builder.BuildError, "provenance"):
+                builder.package(binary, second)
+
     def test_native_factory_is_validated(self):
         self.fixture["native"] = [{"module":"example.com/native", "package":"example.com/native/watch", "version":"v1.0.0", "factory":"Component"}]
         self.read(self.fixture)

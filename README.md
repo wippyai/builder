@@ -54,3 +54,17 @@ not require pack files to exist yet. After packing, seal the input hashes and
 build the application executable. Native modules from private repositories must
 set `private: true`; the builder adds only those module prefixes to Go's private
 fetch/checksum configuration and uses normal Git credential handling.
+
+## Release artifacts
+
+`builder.py package dist/my-app --output dist/my-app-linux-amd64.tar.gz`
+collects the executable, manifest provenance, effective Go module graph, dependency
+license inventory and runtime patches, and emits a SHA-256 checksum file. Archive
+ownership and timestamps are normalized. This does not promise identical binaries:
+application pack timestamps and the native C toolchain also affect build bytes.
+
+The inventory includes the Go license and available module license files; modules
+without root license files are explicitly listed for downstream review. Application
+publishers must retain their own license and resolve missing upstream notices before
+public distribution. The builder verifies that Go's selected native versions equal
+the manifest; a dependency upgrade or replacement cannot silently change them.
