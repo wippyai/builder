@@ -1,0 +1,4 @@
+organization: example
+module: hello
+version: 1.0.0
+license: MIT

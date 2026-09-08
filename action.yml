@@ -1,0 +1,42 @@
+name: Build Wippy application
+description: Assemble a native executable from a pinned application manifest
+inputs:
+  manifest:
+    description: Application build manifest relative to the workspace
+    required: true
+  output:
+    description: Executable output path relative to the workspace
+    required: true
+runs:
+  using: composite
+  steps:
+  - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+    with:
+      python-version: '3.12'
+  - name: Read pinned toolchain
+    id: manifest
+    shell: bash
+    env:
+      MANIFEST_PATH: ${{ inputs.manifest }}
+    run: |
+      python3 - <<'PY'
+      import json, os, re
+      from pathlib import Path
+      manifest = json.loads(Path(os.environ['MANIFEST_PATH']).read_text())
+      version = manifest['runtime']['go']
+      if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', version):
+          raise SystemExit('An exact Go toolchain version is required')
+      with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+          output.write('go=' + version + '\n')
+      PY
+  - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+    with:
+      go-version: ${{ steps.manifest.outputs.go }}
+      cache: false
+  - name: Build application
+    shell: bash
+    env:
+      BUILDER_DIRECTORY: ${{ github.action_path }}
+      MANIFEST_PATH: ${{ inputs.manifest }}
+      BINARY_PATH: ${{ inputs.output }}
+    run: python3 "$BUILDER_DIRECTORY/builder.py" build "$MANIFEST_PATH" --output "$BINARY_PATH"

@@ -1,0 +1,18 @@
+version: '1.0'
+namespace: example.hello
+entries:
+- name: main
+  kind: process.lua
+  source: file://main.lua
+  method: main
+  modules:
+  - io
+  meta:
+    command:
+      name: hello
+      main: true
+- name: terminal
+  kind: terminal.host
+  hide_logs: true
+  lifecycle:
+    auto_start: true

@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "name": "hello",
+  "runtime": {
+    "repository": "https://github.com/wippyai/runtime.git",
+    "commit": "d47e88bd7d26c0169a41315aa7427aa00a860686",
+    "go": "1.27.0",
+    "tags": [
+      "fts5",
+      "sqlite_vec",
+      "treesitter",
+      "sqlite_preupdate_hook"
+    ]
+  },
+  "application": {
+    "module": "example/hello",
+    "command": "hello",
+    "mode": "base",
+    "packs": [
+      {
+        "module": "example/hello",
+        "version": "1.0.0",
+        "path": "hello.wapp",
+        "sha256": "6716461a535a5eb7cd0f0340d239ad68078f42f15ed5ad1952a05b628a0993dc"
+      }
+    ]
+  }
+}
