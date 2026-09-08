@@ -25,5 +25,6 @@ snapshot:
   version_template: '{{ .Env.RELEASE_VERSION }}'
 release:
   draft: true
+  prerelease: auto
 changelog:
   use: git
