@@ -1,12 +1,19 @@
 name: Builder
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
+  workflow_call:
 permissions:
   contents: read
+concurrency:
+  group: builder-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 jobs:
   unit:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
     - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
@@ -14,6 +21,22 @@ jobs:
         go-version-file: go.mod
         cache: false
     - run: make check
+  portable:
+    name: CLI tests (${{ matrix.runner }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04-arm, macos-26, macos-26-intel, windows-2025, windows-11-arm]
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+    - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+      with:
+        go-version-file: go.mod
+        cache: false
+    - run: go test ./...
+    - run: go vet ./...
   standalone:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
@@ -51,3 +74,13 @@ jobs:
         path: |
           dist/hello-linux-amd64.tar.gz
           dist/hello-linux-amd64.tar.gz.sha256
+  required:
+    name: Builder CI
+    if: always()
+    needs: [unit, portable, standalone]
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Require every check
+      env:
+        RESULTS: ${{ join(needs.*.result, ',') }}
+      run: test "$RESULTS" = success,success,success

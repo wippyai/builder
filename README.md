@@ -126,6 +126,9 @@ requirements and additional platform acceptance remain pending.
 
 ## Development
 
+See [releasing](docs/RELEASING.md) for local archives, platform checks and the
+GitHub draft-release protocol.
+
 ```sh
 make check
 make smoke OUTPUT=dist/hello

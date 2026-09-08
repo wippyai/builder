@@ -18,3 +18,10 @@ example-pack: tools
 	dist/wippy-builder pack examples/hello/wippy.build.json --toolchain "$(WIPPY)"
 smoke:
 	WIPPY_TEST_BINARY="$(abspath $(OUTPUT))" go test ./internal/assemble -run 'Test(Standalone|Arguments)' -count=1 -v
+
+GORELEASER ?= goreleaser
+export RELEASE_VERSION ?= 0.0.0-dev
+.PHONY: release
+release: check
+	$(GORELEASER) check
+	$(GORELEASER) release --snapshot --clean --skip=publish

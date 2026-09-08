@@ -17,8 +17,11 @@ func color(text, code string) string {
 	}
 	return text
 }
+
+var version = "dev"
+
 func newCommand() *cobra.Command {
-	root := &cobra.Command{Use: "wippy-builder", Short: "Assemble native Wippy applications", SilenceErrors: true, SilenceUsage: true}
+	root := &cobra.Command{Use: "wippy-builder", Version: version, Short: "Assemble native Wippy applications", SilenceErrors: true, SilenceUsage: true}
 	root.AddCommand(newBuildCommand(false), newBuildCommand(true), newPackCommand(), newSealCommand(), newPackageCommand())
 	root.AddCommand(&cobra.Command{Use: "validate MANIFEST", Short: "Validate pinned assembly inputs", Args: cobra.ExactArgs(1), RunE: func(_ *cobra.Command, args []string) error { _, err := assemble.ReadManifest(args[0]); return err }})
 	return root
