@@ -3,5 +3,5 @@
   <desc id="description">Wippy Builder wordmark with a gold square on a dark background.</desc>
   <rect width="1200" height="240" rx="12" fill="#10151b"/>
   <rect x="64" y="76" width="88" height="88" rx="10" fill="#edbd59"/>
-  <text x="200" y="145" fill="#f0f3f6" font-family="DejaVu Sans" font-size="68" font-weight="bold">Wippy Builder</text>
+  <text x="200" y="145" fill="#f0f3f6" font-family="DejaVu Sans, Arial, sans-serif" font-size="68" font-weight="bold">Wippy Builder</text>
 </svg>

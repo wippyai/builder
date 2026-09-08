@@ -58,7 +58,7 @@ Activation requires a restart. Native code changes require a new executable.
 
 ## Validation
 
-`make check` runs Go race tests, vet and formatting checks. Tests cover manifest
+`make check` runs workflow lint, secret scanning, Go race tests, vet and formatting checks. Tests cover manifest
 validation, generated source, input protection, exact native dependency ownership,
 atomic file writes, artifact tampering and archive metadata.
 
@@ -78,6 +78,8 @@ retain MPL-2.0 headers and dependencies retain their own licenses.
 - Native event adapters use revision-coupled engine APIs.
 - Update lint checks exports and Lua types; semantic native-version requirements
   remain unimplemented.
-- macOS, Windows and additional architectures need builds and application tests.
-- Bee Hub publication and in-app installation remain unimplemented.
+- CLI checks cover Linux, macOS and Windows on amd64 and arm64. Standalone
+  application acceptance runs on Linux; Bee adds Linux and macOS desktop checks.
+- Bee's Hub publication workflow is implemented. A completed production upload,
+  Bee update proof and in-app installation remain separate acceptance work.
 - Stable distribution requires complete upstream license notices and review.

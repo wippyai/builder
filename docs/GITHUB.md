@@ -7,11 +7,11 @@ is [docs/README.md](README.md); no GitHub Pages site is configured.
 
 | Setting | Configuration |
 |---|---|
-| Main | Pull request, one approving review, stale approval dismissal, resolved conversations, current base |
+| Main | Pull request, one code-owner review, stale approval dismissal, resolved conversations, current base |
 | Required checks | `Builder CI`, produced by GitHub Actions |
 | Administrators | Main protection applies |
 | History | Linear; force pushes and deletion blocked |
-| Release tags | Updates and deletion blocked, including administrators |
+| Release tags | Creation limited to administrators; updates and deletion blocked for everyone |
 | Default Actions token | Read-only; cannot approve pull requests |
 | External actions | Full commit SHA required |
 | Secret protection | GitHub scanning and push protection enabled |

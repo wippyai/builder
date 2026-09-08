@@ -34,7 +34,7 @@ token rule. Standalone assembly waits for this gate. Dependabot groups weekly
 Actions and Go dependency updates to limit PR runs. Actions default to read-only
 permissions and require full commit pins; checkout does not retain credentials.
 
-After merging and choosing a version, create a `v…` tag on the reviewed main
+After merging and choosing a version, an administrator creates a `v…` tag on the reviewed main
 commit. Release tags cannot be moved or deleted. The release workflow checks
 that the commit belongs to main, reruns CI, and uses pinned GoReleaser to create
 a **draft** GitHub release. Review its assets and notes before publication.
