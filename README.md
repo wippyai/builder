@@ -143,7 +143,8 @@ for ownership, validation, and remaining release work.
 ## License
 
 Builder is [MIT licensed](LICENSE). Applications, Wippy, and native dependencies
-retain their own licenses. The generated notice inventory lists missing root
+retain their own licenses. CLI archives include [dependency notices](THIRD_PARTY_NOTICES.txt).
+The generated application notice inventory lists missing root
 license files for review before public distribution.
 
 [Contributing](CONTRIBUTING.md) · [Code of conduct](https://github.com/wippyai/.github/blob/main/.github/CODE_OF_CONDUCT.md) · [Security](SECURITY.md)
