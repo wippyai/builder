@@ -28,7 +28,13 @@ runs:
     id: builder
     shell: bash
     working-directory: ${{ github.action_path }}
+    env:
+      BUILDER_REVISION: ${{ github.action_ref }}
     run: |
+      if [ -n "$BUILDER_REVISION" ] && ! [[ "$BUILDER_REVISION" =~ ^[0-9a-f]{40}$ ]]; then
+        echo 'Pin the Builder action to a full commit SHA.' >&2
+        exit 1
+      fi
       make tools
       echo "path=$PWD/dist/wippy-builder" >> "$GITHUB_OUTPUT"
   - name: Build application

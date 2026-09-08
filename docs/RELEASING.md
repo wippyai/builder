@@ -50,5 +50,9 @@ artifacts. Build applications on their target platform so this validation can ru
 The optional runtime style rules are separate; their current identical-expression
 rule incorrectly rejects NaN guards. Go code must pass race tests, vet and gofmt.
 
+The GitHub action requires a full commit SHA. It embeds that revision when its
+downloaded source has no Git metadata. Normal checkout builds derive revision
+and modification status from Go's VCS build information.
+
 Signing and Hub publication require separate configuration. Store private keys
 in restricted secret storage; they are never release assets or pack inputs.
