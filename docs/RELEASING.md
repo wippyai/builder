@@ -14,10 +14,14 @@ make release RELEASE_VERSION=0.1.0-dev
 
 This runs race tests, vet and formatting checks, validates the release
 configuration, and creates snapshot archives and `SHA256SUMS` in `dist/`.
-It does not publish. Each archive contains the CLI, README and MIT license.
+It does not publish. Each archive contains the CLI, README, MIT license and
+`THIRD_PARTY_NOTICES.txt` with Cobra, pflag, mousetrap and Go license texts.
 Linux and macOS use tar.gz; Windows uses zip. All three have amd64 and arm64
 builds. The CLI uses pure Go; assembling a Wippy application also requires the
 application's native compiler and dependencies.
+
+When changing CLI dependencies or the Go version, review and refresh
+`THIRD_PARTY_NOTICES.txt` from the selected modules' original license files.
 
 ## Pull requests and tags
 
