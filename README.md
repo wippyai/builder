@@ -84,7 +84,7 @@ With packs prepared and their checksums recorded, add this step after checkout:
 
 ```yaml
 - name: Build application
-  uses: wippyai/builder@6e2852f063f833fdcee9b6a2f63ccee6d8523e01
+  uses: wippyai/builder@fe458f77bdfc09e7cc3baa7da0a9482aa71638d5
   with:
     manifest: wippy.build.json
     output: dist/my-app
@@ -125,6 +125,9 @@ exports and types against the compiled modules. Semantic native-version
 requirements and additional platform acceptance remain pending.
 
 ## Development
+
+See [releasing](docs/RELEASING.md) for local archives, platform checks and the
+GitHub draft-release protocol.
 
 ```sh
 make check

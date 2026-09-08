@@ -22,6 +22,9 @@ type BuilderIdentity struct {
 	Go       string `json:"go"`
 }
 
+// buildRevision supplies the action's pinned revision when Git metadata is absent.
+var buildRevision string
+
 func builderIdentity() BuilderIdentity {
 	var identity BuilderIdentity
 	if info, ok := debug.ReadBuildInfo(); ok {
@@ -35,11 +38,14 @@ func builderIdentity() BuilderIdentity {
 			}
 		}
 	}
+	if identity.Revision == "" {
+		identity.Revision = buildRevision
+	}
 	return identity
 }
 
 func exportBuild(source, binary string, outputs artifactSet, m *Manifest, inputs map[string]string, env []string, toolchain bool) error {
-	notices, err := licenseNotices(source, env)
+	notices, err := licenseNotices(source, binary, env)
 	if err != nil {
 		return err
 	}

@@ -3,17 +3,37 @@ package assemble
 
 import (
 	"bytes"
+	"debug/buildinfo"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"sort"
 	"strings"
 )
 
-func licenseNotices(source string, env []string) ([]byte, error) {
+var licenseDocumentPattern = regexp.MustCompile(`^(LICENSE|LICENCE|COPYING|NOTICE|COPYRIGHT)([._-]|$)`)
+
+func isLicenseDocument(name string) bool {
+	if !licenseDocumentPattern.MatchString(strings.ToUpper(name)) {
+		return false
+	}
+	switch strings.ToLower(filepath.Ext(name)) {
+	case "", ".txt", ".md", ".rst", ".html", ".htm":
+		return true
+	default:
+		return false
+	}
+}
+
+func licenseNotices(source, binary string, env []string) ([]byte, error) {
+	info, err := buildinfo.ReadFile(binary)
+	if err != nil {
+		return nil, fmt.Errorf("read binary module identity: %w", err)
+	}
 	encoded, err := capture(source, env, "go", "list", "-m", "-json", "all")
 	if err != nil {
 		return nil, err
@@ -31,6 +51,10 @@ func licenseNotices(source string, env []string) ([]byte, error) {
 		}
 		modules = append(modules, m)
 	}
+	modules, err = linkedModuleSources(info, modules)
+	if err != nil {
+		return nil, err
+	}
 	sort.Slice(modules, func(i, j int) bool { return modules[i].Path < modules[j].Path })
 	goroot, err := capture(source, env, "go", "env", "GOROOT")
 	if err != nil {
@@ -41,10 +65,9 @@ func licenseNotices(source string, env []string) ([]byte, error) {
 		return nil, err
 	}
 	var notices bytes.Buffer
-	notices.WriteString("Third-party license inventory for this build.\n\nGo toolchain and standard library\n")
+	notices.WriteString("Root license documents for the Go modules linked into this executable.\n\nGo toolchain and standard library\n")
 	notices.Write(license)
 	var missing []string
-	pattern := regexp.MustCompile(`^(LICENSE|LICENCE|COPYING|NOTICE|COPYRIGHT)([._-]|$)`)
 	for _, m := range modules {
 		if m.Replace != nil {
 			m = *m.Replace
@@ -58,7 +81,7 @@ func licenseNotices(source string, env []string) ([]byte, error) {
 		}
 		found := false
 		for _, file := range files {
-			if file.Type().IsRegular() && pattern.MatchString(strings.ToUpper(file.Name())) {
+			if file.Type().IsRegular() && isLicenseDocument(file.Name()) {
 				if !found {
 					fmt.Fprintf(&notices, "\n%s@%s\n", m.Path, m.Version)
 				}
@@ -78,4 +101,34 @@ func licenseNotices(source string, env []string) ([]byte, error) {
 		fmt.Fprintf(&notices, "\nModules without a root license file; consult their source distributions:\n%s\n", strings.Join(missing, "\n"))
 	}
 	return notices.Bytes(), nil
+}
+
+func linkedModuleSources(info *debug.BuildInfo, modules []goModule) ([]goModule, error) {
+	linked := map[string]bool{info.Main.Path: true}
+	for _, dependency := range info.Deps {
+		linked[dependency.Path] = true
+	}
+	var sources []goModule
+	for _, module := range modules {
+		if linked[module.Path] {
+			source := module
+			if module.Replace != nil {
+				source = *module.Replace
+			}
+			if source.Dir == "" {
+				return nil, fmt.Errorf("missing source directory for linked module %s", module.Path)
+			}
+			sources = append(sources, module)
+			delete(linked, module.Path)
+		}
+	}
+	if len(linked) != 0 {
+		missing := make([]string, 0, len(linked))
+		for path := range linked {
+			missing = append(missing, path)
+		}
+		sort.Strings(missing)
+		return nil, fmt.Errorf("missing source metadata for linked modules: %s", strings.Join(missing, ", "))
+	}
+	return sources, nil
 }

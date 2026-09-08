@@ -230,6 +230,9 @@ func PackRoot(path, toolchain, version string) error {
 	if output == path {
 		return fmt.Errorf("pack output overlaps the build manifest")
 	}
+	if err = run(filepath.Dir(path), nil, toolchain, strictLintArgs()...); err != nil {
+		return fmt.Errorf("validate application source: %w", err)
+	}
 	if err = os.MkdirAll(filepath.Dir(output), 0755); err != nil {
 		return err
 	}

@@ -48,7 +48,17 @@ func Build(manifestPath, output string, toolchain bool) error {
 	if err = run(source, env, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-tags", strings.Join(manifest.Runtime.Tags, ","), "-o", binary, "./cmd/assembled"); err != nil {
 		return err
 	}
+	if !toolchain {
+		args := append([]string{"--state-dir", filepath.Join(stage, "validation-state"), "runtime"}, strictLintArgs()...)
+		if err = run(stage, env, binary, args...); err != nil {
+			return fmt.Errorf("validate embedded application: %w", err)
+		}
+	}
 	return exportBuild(source, binary, outputs, manifest, inputs, env, toolchain)
+}
+
+func strictLintArgs() []string {
+	return []string{"lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"}
 }
 
 func freezeInputs(manifestPath string, m *Manifest, outputs artifactSet, stage string, toolchain bool) (map[string]string, error) {

@@ -1,0 +1,46 @@
+name: Builder release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: builder-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        fetch-depth: 0
+    - name: Require a release tag from main
+      shell: bash
+      run: |
+        test "$GITHUB_REF_TYPE" = tag
+        git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+  checks:
+    needs: validate
+    uses: ./.github/workflows/check.yml
+  release:
+    needs: [validate, checks]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
+      with:
+        go-version-file: go.mod
+        cache: false
+    - uses: goreleaser/goreleaser-action@e435ccd777264be153ace6237001ef4d979d3a7a
+      with:
+        distribution: goreleaser
+        version: v2.18.1
+        args: release --clean
+      env:
+        GITHUB_TOKEN: ${{ github.token }}

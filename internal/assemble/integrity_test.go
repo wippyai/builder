@@ -6,9 +6,40 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 )
+
+func TestPackLintFailurePreservesArtifacts(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("fixture uses a POSIX shell")
+	}
+	directory := t.TempDir()
+	path := filepath.Join(directory, "wippy.build.json")
+	m := fixture()
+	m.Application.Packs[0].Path = "application.wapp"
+	must(t, WriteJSON(path, m))
+	manifest, err := os.ReadFile(path)
+	must(t, err)
+	pack := filepath.Join(directory, "application.wapp")
+	must(t, os.WriteFile(pack, []byte("previous pack"), 0644))
+	toolchain := filepath.Join(directory, "toolchain")
+	must(t, os.WriteFile(toolchain, []byte("#!/bin/sh\nif [ \"$1\" = lint ]; then exit 23; fi\nprintf overwritten > application.wapp\n"), 0755))
+	if err := PackRoot(path, toolchain, ""); err == nil {
+		t.Fatal("accepted failed source validation")
+	}
+	after, err := os.ReadFile(path)
+	must(t, err)
+	if !slices.Equal(manifest, after) {
+		t.Fatal("failed validation changed manifest")
+	}
+	data, err := os.ReadFile(pack)
+	must(t, err)
+	if string(data) != "previous pack" {
+		t.Fatal("failed validation replaced pack")
+	}
+}
 
 func TestFailedAtomicWritePreservesExistingFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "result")

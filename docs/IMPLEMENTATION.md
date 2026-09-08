@@ -34,6 +34,12 @@ dependency notices and runtime patch sources. Packaging verifies a snapshot of
 that artifact set and writes an archive and checksum. Archive metadata is
 normalized; binary bytes also depend on pack timestamps and the C toolchain.
 
+The license inventory selects Go modules recorded in the executable and resolves
+their source directories from the effective module graph, including replacements.
+It includes root license documents in common text formats and lists missing ones.
+Source files named after licenses are excluded. Missing linked-module source
+metadata fails the build before artifacts are exported.
+
 ## Application deployment
 
 Embedded packs include the graph required for first boot. Packs retain their
