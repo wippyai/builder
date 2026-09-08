@@ -84,7 +84,7 @@ With packs prepared and their checksums recorded, add this step after checkout:
 
 ```yaml
 - name: Build application
-  uses: wippyai/builder@6109b4f13fa9e715d7e80e58e19840ae596a02f7
+  uses: wippyai/builder@fe458f77bdfc09e7cc3baa7da0a9482aa71638d5
   with:
     manifest: wippy.build.json
     output: dist/my-app
