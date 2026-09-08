@@ -47,3 +47,10 @@ manifest commit and never consumes the mirror's working files.
 The composite GitHub action accepts `manifest` and `output` inputs. Consumers
 should pin this repository to a reviewed commit. Platform release workflows and
 full Bee/native-module acceptance are still being implemented.
+
+Use `builder.py toolchain MANIFEST --output dist/wippy` to build the same native
+component selection for source linting, tests and pack generation. This step does
+not require pack files to exist yet. After packing, seal the input hashes and
+build the application executable. Native modules from private repositories must
+set `private: true`; the builder adds only those module prefixes to Go's private
+fetch/checksum configuration and uses normal Git credential handling.

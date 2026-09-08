@@ -74,10 +74,11 @@ def read_manifest(path):
         require(isinstance(relative, str) and relative and not Path(relative).is_absolute() and ".." not in Path(relative).parts, "data path must be local")
     native_modules = set()
     for native in value.get("native", []):
-        exact_keys(native, ["module", "version", "package", "factory"], [], "native component")
+        exact_keys(native, ["module", "version", "package", "factory"], ["private"], "native component")
         require(matches(r"[A-Za-z0-9._~/-]+", native["module"]) and "." in native["module"], "invalid native module path")
         require(native["module"] not in native_modules, "duplicate native module; expose one component factory per module")
         native_modules.add(native["module"])
+        require(isinstance(native.get("private", False), bool), "native.private must be a boolean")
         require(matches(r"v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?", native["version"]), "native version must be exact")
         require(isinstance(native["package"], str) and (native["package"] == native["module"] or native["package"].startswith(native["module"] + "/")), "native package must belong to selected module")
         require(matches(r"[A-Z][A-Za-z0-9_]*", native["factory"]), "native factory must be an exported Go identifier")
@@ -167,6 +168,11 @@ def build(manifest_path, output, *, toolchain=False):
     output = output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     env = {**os.environ, "GOWORK": "off", "GOTOOLCHAIN": "go"+runtime["go"], "CGO_ENABLED": "1", "GOFLAGS": ""}
+    private_modules = [component["module"] for component in manifest.get("native", []) if component.get("private")]
+    if private_modules:
+        for key in ("GOPRIVATE", "GONOPROXY", "GONOSUMDB"):
+            configured = subprocess.check_output(["go", "env", key], env=env, text=True).strip()
+            env[key] = ",".join(filter(None, [configured, *private_modules]))
     with tempfile.TemporaryDirectory(prefix="wippy-build-") as temporary:
         stage = Path(temporary)
         source = stage / "runtime"

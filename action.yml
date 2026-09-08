@@ -7,6 +7,16 @@ inputs:
   output:
     description: Executable output path relative to the workspace
     required: true
+  mode:
+    description: Build an application executable or its native development toolchain
+    default: build
+  token:
+    description: GitHub token for private native module fetching
+    default: ${{ github.token }}
+outputs:
+  builder:
+    description: Builder script path for subsequent Makefile packaging steps
+    value: ${{ steps.location.outputs.builder }}
 runs:
   using: composite
   steps:
@@ -33,10 +43,21 @@ runs:
     with:
       go-version: ${{ steps.manifest.outputs.go }}
       cache: false
+  - name: Locate builder
+    id: location
+    shell: bash
+    env:
+      BUILDER_DIRECTORY: ${{ github.action_path }}
+    run: echo "builder=$BUILDER_DIRECTORY/builder.py" >> "$GITHUB_OUTPUT"
   - name: Build application
     shell: bash
     env:
       BUILDER_DIRECTORY: ${{ github.action_path }}
       MANIFEST_PATH: ${{ inputs.manifest }}
       BINARY_PATH: ${{ inputs.output }}
-    run: python3 "$BUILDER_DIRECTORY/builder.py" build "$MANIFEST_PATH" --output "$BINARY_PATH"
+      BUILD_MODE: ${{ inputs.mode }}
+      GH_TOKEN: ${{ inputs.token }}
+    run: |
+      case "$BUILD_MODE" in build|toolchain) ;; *) echo 'Invalid build mode' >&2; exit 1 ;; esac
+      if [ -n "$GH_TOKEN" ]; then gh auth setup-git --hostname github.com; fi
+      python3 "$BUILDER_DIRECTORY/builder.py" "$BUILD_MODE" "$MANIFEST_PATH" --output "$BINARY_PATH"
