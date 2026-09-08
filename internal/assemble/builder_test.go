@@ -2,14 +2,18 @@
 package assemble
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"go/parser"
 	"go/token"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -90,6 +94,7 @@ func TestArchiveDeterminismAndTampering(t *testing.T) {
 	must(t, err)
 	provenance := Provenance{Schema: 1, Mode: "application", Manifest: &m, Artifacts: hashes}
 	must(t, WriteJSON(artifacts.Provenance.Path, provenance))
+	must(t, os.WriteFile(binary+".runtime-patches.tar.gz", []byte("obsolete output"), 0644))
 	first, second := filepath.Join(root, "first.tar.gz"), filepath.Join(root, "second.tar.gz")
 	must(t, Package(binary, first))
 	must(t, os.Chtimes(binary, time.Now(), time.Now()))
@@ -100,6 +105,23 @@ func TestArchiveDeterminismAndTampering(t *testing.T) {
 	must(t, err)
 	if !bytes.Equal(a, b) {
 		t.Fatal("archive depends on host metadata")
+	}
+	compressed, err := gzip.NewReader(bytes.NewReader(a))
+	must(t, err)
+	defer compressed.Close()
+	archive := tar.NewReader(compressed)
+	var names []string
+	for {
+		header, err := archive.Next()
+		if err == io.EOF {
+			break
+		}
+		must(t, err)
+		names = append(names, header.Name)
+	}
+	want := []string{"hello", "hello.LICENSES.txt", "hello.go.mod", "hello.go.sum", "hello.provenance.json"}
+	if !slices.Equal(names, want) {
+		t.Fatalf("unexpected release archive contents: %v", names)
 	}
 	if err = Package(binary, binary); err == nil {
 		t.Fatal("archive overwrote its binary input")

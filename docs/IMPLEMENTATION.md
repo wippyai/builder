@@ -23,14 +23,17 @@ revision requirements.
 ## Build inputs and outputs
 
 A manifest selects an exact runtime commit, Go toolchain, build tags,
-checksummed patches, versioned application packs and native component factories.
-The assembler copies pack and patch inputs into staging and verifies their
+versioned application packs and native component factories.
+The assembler copies pack inputs into staging and verifies their
 hashes before invoking build tools. Git operates on a temporary checkout. Go
 workspaces and ambient build flags are disabled.
 
+Runtime changes belong upstream. Manifest decoding rejects `runtime.patches`;
+the assembler compiles the selected runtime with a generated command entrypoint.
+
 Go's selected package owner and module version must match each native pin.
 The build emits an executable, provenance, effective Go module files, available
-dependency notices and runtime patch sources. Packaging verifies a snapshot of
+dependency notices. Packaging verifies a snapshot of
 that artifact set and writes an archive and checksum. Archive metadata is
 normalized; binary bytes also depend on pack timestamps and the C toolchain.
 
@@ -69,12 +72,11 @@ networking disabled.
 
 Bee's consuming workflow adds typed Lua checks, filesystem permission and event
 tests, and desktop acceptance for Terminal, Settings recovery and F12. Version
-tags prepare draft releases. Builder and Bee-owned code are MIT; runtime patches
-retain MPL-2.0 headers and dependencies retain their own licenses.
+tags prepare draft releases. Builder and Bee-owned code are MIT; Wippy retains
+MPL-2.0 and dependencies retain their own licenses.
 
 ## Remaining release work
 
-- Runtime host APIs are implemented in pending upstream PRs 667 and 668.
 - Native event adapters use revision-coupled engine APIs.
 - Update lint checks exports and Lua types; semantic native-version requirements
   remain unimplemented.

@@ -2,7 +2,6 @@
 package assemble
 
 import (
-	"fmt"
 	"path/filepath"
 	"runtime/debug"
 )
@@ -44,7 +43,7 @@ func builderIdentity() BuilderIdentity {
 	return identity
 }
 
-func exportBuild(source, binary string, outputs artifactSet, m *Manifest, inputs map[string]string, env []string, toolchain bool) error {
+func exportBuild(source, binary string, outputs artifactSet, m *Manifest, env []string, toolchain bool) error {
 	notices, err := licenseNotices(source, binary, env)
 	if err != nil {
 		return err
@@ -59,13 +58,6 @@ func exportBuild(source, binary string, outputs artifactSet, m *Manifest, inputs
 		return err
 	}
 	if err = copyFile(filepath.Join(source, "go.sum"), outputs.GoSum.Path, 0644); err != nil {
-		return err
-	}
-	var patches []archiveFile
-	for i, patch := range m.Runtime.Patches {
-		patches = append(patches, archiveFile{Path: inputs[patch.Path], Name: fmt.Sprintf("%d-%s", i, filepath.Base(patch.Path))})
-	}
-	if err = archiveFiles(patches, outputs.RuntimePatches.Path); err != nil {
 		return err
 	}
 	hashes, err := outputs.hashes()

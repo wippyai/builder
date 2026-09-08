@@ -29,7 +29,6 @@ type Runtime struct {
 	Commit     string   `json:"commit"`
 	Go         string   `json:"go"`
 	Tags       []string `json:"tags"`
-	Patches    []Input  `json:"patches,omitempty"`
 }
 type Application struct {
 	Module  string            `json:"module"`
@@ -118,18 +117,7 @@ func (m *Manifest) Validate() error {
 			return fmt.Errorf("invalid build tag %q", tag)
 		}
 	}
-	for _, p := range r.Patches {
-		if !local(p.Path) || !matches(`[0-9a-f]{64}`, p.SHA256) {
-			return fmt.Errorf("patch requires local path and SHA-256")
-		}
-	}
 	paths := make(map[string]bool)
-	for _, patch := range r.Patches {
-		if paths[filepath.Clean(patch.Path)] {
-			return fmt.Errorf("duplicate build input path %q", patch.Path)
-		}
-		paths[filepath.Clean(patch.Path)] = true
-	}
 	app := m.Application
 	if !matches(modulePattern, app.Module) || app.Command == "" || (app.Mode != "base" && app.Mode != "bootstrap") {
 		return fmt.Errorf("invalid application identity, command or mode")
