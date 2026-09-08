@@ -17,4 +17,4 @@ example-pack: tools
 	cd examples/hello && $(WIPPY) lint
 	dist/wippy-builder pack examples/hello/wippy.build.json --toolchain "$(WIPPY)"
 smoke:
-	WIPPY_TEST_BINARY="$(abspath $(OUTPUT))" go test ./internal/assemble -run TestStandalone -count=1 -v
+	WIPPY_TEST_BINARY="$(abspath $(OUTPUT))" go test ./internal/assemble -run 'Test(Standalone|Arguments)' -count=1 -v

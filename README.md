@@ -22,7 +22,9 @@ The embedded pack is a deployment input. Starting an already initialized
 application uses its installed lock graph, including explicit Hub updates; it
 must never overwrite an updated application just because a bundled pack exists.
 
-See [implementation requirements](docs/IMPLEMENTATION.md).
+See the [application and native module SDK](docs/SDK.md) for pack configuration,
+boot registration, typed modules, filesystem events and argument passing, and
+[implementation requirements](docs/IMPLEMENTATION.md) for the release boundary.
 
 ## Local use
 

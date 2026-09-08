@@ -16,3 +16,12 @@ entries:
   hide_logs: true
   lifecycle:
     auto_start: true
+- name: arguments
+  kind: process.lua
+  source: file://arguments.lua
+  method: main
+  modules:
+  - io
+  meta:
+    command:
+      name: arguments

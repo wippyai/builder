@@ -21,7 +21,7 @@
         "module": "example/hello",
         "version": "1.0.0",
         "path": "hello.wapp",
-        "sha256": "6716461a535a5eb7cd0f0340d239ad68078f42f15ed5ad1952a05b628a0993dc"
+        "sha256": "30e5dc4157ca399daa7621617eeff2338fd21e26d3248fcd49cde27016166bf4"
       }
     ]
   }
