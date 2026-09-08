@@ -1,21 +1,20 @@
-.PHONY: check test build
+export GOWORK := off
+export GOTOOLCHAIN := go1.27.0
 MANIFEST ?= wippy.build.json
 OUTPUT ?= dist/application
-check: test
-	python3 -m py_compile builder.py
-
-test:
-	python3 -m unittest discover -s tests -v
-
-build:
-	python3 builder.py build "$(MANIFEST)" --output "$(OUTPUT)"
-
 WIPPY ?= wippy
-.PHONY: example-pack
-example-pack:
+.PHONY: check test build tools example-pack smoke
+check: test
+	go vet ./...
+	@test -z "$$(gofmt -l cmd internal)"
+test:
+	go test -race ./...
+tools:
+	go build -trimpath -o dist/wippy-builder ./cmd/wippy-builder
+build: tools
+	dist/wippy-builder build "$(MANIFEST)" --output "$(OUTPUT)"
+example-pack: tools
 	cd examples/hello && $(WIPPY) lint
-	cd examples/hello && $(WIPPY) pack hello.wapp --meta namespace=example.hello --meta name=hello --meta version=1.0.0 --silent
-
-.PHONY: smoke
+	dist/wippy-builder pack examples/hello/wippy.build.json --toolchain "$(WIPPY)"
 smoke:
-	python3 tests/standalone.py "$(OUTPUT)"
+	WIPPY_TEST_BINARY="$(abspath $(OUTPUT))" go test ./internal/assemble -run TestStandalone -count=1 -v

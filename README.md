@@ -26,12 +26,13 @@ See [implementation requirements](docs/IMPLEMENTATION.md).
 
 ## Local use
 
-Python 3.12, Git, the manifest's Go toolchain, and a C compiler are required.
+Go, Git and a C compiler are required. The assembler uses only the Go standard library
+and selects the runtime toolchain pinned by the application manifest.
 
 ```sh
-make check
-python3 builder.py validate path/to/wippy.build.json
-python3 builder.py build path/to/wippy.build.json --output dist/my-app
+make check tools
+dist/wippy-builder validate path/to/wippy.build.json
+dist/wippy-builder build path/to/wippy.build.json --output dist/my-app
 ```
 
 The manifest lists exact pack identities, versions and SHA-256 checksums, a
@@ -39,7 +40,7 @@ runtime commit and Go version, optional checksummed runtime patches, and native
 Go module versions with exported component factories. See
 [the hello manifest](examples/hello/wippy.build.json).
 
-After intentionally regenerating input packs, `python3 builder.py seal MANIFEST`
+After intentionally regenerating input packs, `dist/wippy-builder seal MANIFEST`
 refreshes their checksums. Normal builds only verify checksums. A build emits the
 executable, JSON provenance, module files, license inventory and runtime patches. `WIPPY_BUILD_RUNTIME_REPOSITORY` may
 select a local Git mirror for development; the builder still checks out the exact
@@ -49,7 +50,7 @@ The composite GitHub action accepts `manifest` and `output` inputs. Consumers
 should pin this repository to a reviewed commit. Bee supplies a consuming Linux amd64 workflow with foundation/native acceptance,
 offline PTY checks, archives and tag-triggered draft releases.
 
-Use `builder.py toolchain MANIFEST --output dist/wippy` to build the same native
+Use `dist/wippy-builder toolchain MANIFEST --output dist/wippy` to build the same native
 component selection for source linting, tests and pack generation. This step does
 not require pack files to exist yet. After packing, seal the input hashes and
 build the application executable. Native modules from private repositories must
@@ -58,7 +59,7 @@ fetch/checksum configuration and uses normal Git credential handling.
 
 ## Release artifacts
 
-`builder.py package dist/my-app --output dist/my-app-linux-amd64.tar.gz`
+`dist/wippy-builder package dist/my-app --output dist/my-app-linux-amd64.tar.gz`
 collects the executable, manifest provenance, effective Go module graph, dependency
 license inventory and runtime patches, and emits a SHA-256 checksum file. Archive
 ownership and timestamps are normalized. This does not promise identical binaries:
@@ -69,3 +70,8 @@ without root license files are explicitly listed for downstream review. Applicat
 publishers must retain their own license and resolve missing upstream notices before
 public distribution. The builder verifies that Go's selected native versions equal
 the manifest; a dependency upgrade or replacement cannot silently change them.
+
+The CLI emits terminal-aware status colors and honors `NO_COLOR`. Redirected logs
+remain plain text. `wippy-builder pack MANIFEST --toolchain PATH --version VERSION`
+prepares a self-contained source pack and seals its checksum; dependency packs
+are supplied independently in a multi-module manifest.

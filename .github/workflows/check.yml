@@ -9,49 +9,45 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-    - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+    - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
       with:
-        python-version: '3.12'
+        go-version-file: go.mod
+        cache: false
     - run: make check
   standalone:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-    - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff
-      with:
-        go-version: '1.27.0'
-        cache: false
     - name: Build pinned development runtime
-      run: |
-        python3 builder.py toolchain examples/hello/wippy.build.json --output dist/wippy
+      uses: ./
+      with:
+        mode: toolchain
+        manifest: examples/hello/wippy.build.json
+        output: dist/wippy
     - name: Prepare fixture pack
-      run: |
-        make example-pack WIPPY="$PWD/dist/wippy"
-        python3 builder.py seal examples/hello/wippy.build.json
+      run: make example-pack WIPPY="$PWD/dist/wippy"
     - uses: ./
       with:
         manifest: examples/hello/wippy.build.json
         output: dist/hello
     - name: Verify standalone execution with networking disabled
-      run: sudo unshare --net -- python3 tests/standalone.py "$PWD/dist/hello"
+      run: |
+        GOWORK=off go test -c -o dist/acceptance ./internal/assemble
+        sudo unshare --net -- env WIPPY_TEST_BINARY="$PWD/dist/hello" ./dist/acceptance -test.run '^TestStandalone$' -test.v
     - name: Verify canonical Hub updates through the binary
-      run: python3 tests/hub.py dist/hello examples/hello/wippy.build.json
+      run: GOWORK=off WIPPY_TEST_BINARY="$PWD/dist/hello" WIPPY_TEST_MANIFEST="$PWD/examples/hello/wippy.build.json" go test ./internal/assemble -run '^TestHub$' -count=1 -v
     - name: Verify bootstrap mode
       run: |
-        python3 - <<'PY'
-        import json
-        from pathlib import Path
-        path = Path("examples/hello/wippy.build.json")
-        manifest = json.loads(path.read_text())
-        manifest["application"]["mode"] = "bootstrap"
-        path.with_name("bootstrap.json").write_text(json.dumps(manifest))
-        PY
-        python3 builder.py build examples/hello/bootstrap.json --output dist/hello-bootstrap
-        python3 tests/standalone.py dist/hello-bootstrap --bootstrap
+        cp examples/hello/wippy.build.json examples/hello/bootstrap.json
+        dist/wippy-builder seal examples/hello/bootstrap.json --mode bootstrap
+        dist/wippy-builder build examples/hello/bootstrap.json --output dist/hello-bootstrap
+        WIPPY_TEST_BINARY="$PWD/dist/hello-bootstrap" WIPPY_TEST_BOOTSTRAP=1 ./dist/acceptance -test.run '^TestStandalone$' -test.v
+    - name: Archive release inputs
+      run: dist/wippy-builder package dist/hello --output dist/hello-linux-amd64.tar.gz
     - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
       with:
         name: hello-linux-amd64
         path: |
-          dist/hello
-          dist/hello.*
+          dist/hello-linux-amd64.tar.gz
+          dist/hello-linux-amd64.tar.gz.sha256
