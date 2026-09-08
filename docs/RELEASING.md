@@ -39,7 +39,11 @@ Development checks create no tags. Manual release runs require an existing tag.
 `wippy-builder package` packages an assembled application's verified executable,
 provenance, effective Go module files, dependency notice inventory and runtime
 patch sources. These are separate from Builder's own CLI archives. The inventory
-identifies missing dependency notices; resolve them before public distribution.
+uses the executable's Go build metadata to select linked modules and collects
+their root license documents. Source files such as `license_test.go` are excluded.
+Missing source metadata fails the build; missing license documents are listed
+for review. This inventory does not establish licensing for bundled native
+sources with separate terms. Resolve missing notices before public distribution.
 Application source selection and embedded base/bootstrap mode belong to the
 application manifest. Native component updates require rebuilding the executable.
 

@@ -45,7 +45,7 @@ func builderIdentity() BuilderIdentity {
 }
 
 func exportBuild(source, binary string, outputs artifactSet, m *Manifest, inputs map[string]string, env []string, toolchain bool) error {
-	notices, err := licenseNotices(source, env)
+	notices, err := licenseNotices(source, binary, env)
 	if err != nil {
 		return err
 	}
