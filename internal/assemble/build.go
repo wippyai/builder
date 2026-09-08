@@ -54,7 +54,7 @@ func Build(manifestPath, output string, toolchain bool) error {
 			return fmt.Errorf("validate embedded application: %w", err)
 		}
 	}
-	return exportBuild(source, binary, outputs, manifest, inputs, env, toolchain)
+	return exportBuild(source, binary, outputs, manifest, env, toolchain)
 }
 
 func strictLintArgs() []string {
@@ -62,7 +62,7 @@ func strictLintArgs() []string {
 }
 
 func freezeInputs(manifestPath string, m *Manifest, outputs artifactSet, stage string, toolchain bool) (map[string]string, error) {
-	inputs := append([]Input{}, m.Runtime.Patches...)
+	var inputs []Input
 	if !toolchain {
 		for _, pack := range m.Application.Packs {
 			inputs = append(inputs, Input{Path: pack.Path, SHA256: pack.SHA256})
@@ -107,14 +107,6 @@ func prepareSource(stage string, m *Manifest, inputs map[string]string, toolchai
 	}
 	if err := run(source, nil, "git", "checkout", "--detach", m.Runtime.Commit); err != nil {
 		return "", err
-	}
-	for _, patch := range m.Runtime.Patches {
-		if err := run(source, nil, "git", "apply", "--check", inputs[patch.Path]); err != nil {
-			return "", err
-		}
-		if err := run(source, nil, "git", "apply", inputs[patch.Path]); err != nil {
-			return "", err
-		}
 	}
 	entry := filepath.Join(source, "cmd", "assembled")
 	if !toolchain {

@@ -11,5 +11,5 @@
 | Vulnerabilities and credential handling | [Security](../SECURITY.md) |
 
 The [hello example](../examples/hello) contains a complete build manifest.
-Runtime host patches remain pinned in each application's manifest until their
-upstream APIs are released.
+It uses the merged upstream application host. Runtime changes belong in Wippy;
+Builder configures its APIs and the application's native components.

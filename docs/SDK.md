@@ -3,7 +3,7 @@
 This is the authoring contract for the pinned development runtime. The runtime
 owns the Go APIs, Lua types, scheduler and boot lifecycle. Builder selects and
 compiles those APIs.
-The application host is pending upstream in runtime PRs
+The application host was merged upstream in runtime PRs
 [667](https://github.com/wippyai/runtime/pull/667) and
 [668](https://github.com/wippyai/runtime/pull/668). Go integrations require the
 documented runtime revision.
@@ -17,7 +17,7 @@ documented runtime revision.
 | Published runtime defaults and profiles | `wippy.yaml` `publish` allow-lists | Versioned application pack |
 | Command, base/bootstrap mode and data paths | `wippy.build.json` `application` | New executable |
 | Native Go components and their Lua exports | `wippy.build.json` `native` | New executable |
-| Runtime revision, patches and build tags | `wippy.build.json` `runtime` | New executable |
+| Runtime revision and build tags | `wippy.build.json` `runtime` | New executable |
 | User preferences and application databases | Application-owned persistence | Preserved across code updates |
 
 UI composition uses application code and registry configuration. Include the
@@ -41,7 +41,7 @@ publish:
 
 `publish.profiles` selects the profile source and included profile names;
 `publish.runtime.vars` selects publishable variable declarations. Check the
-[runtime configuration contract](https://github.com/wippyai/runtime/blob/b8c7a9324256dd40a034f29c4a8b25457587fceb/boot/deps/config/config.go)
+[runtime configuration contract](https://github.com/wippyai/runtime/blob/fdad09cef2b766e17b95c52c0aa01183601a9243/boot/deps/config/config.go)
 for the exact fields. Runtime-selected deployment and history paths take
 precedence over pack settings. Credentials and machine-specific paths belong in
 host configuration. Application-specific settings need their own typed decoder.

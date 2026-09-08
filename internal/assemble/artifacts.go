@@ -16,28 +16,26 @@ type artifact struct {
 // artifactSet is the complete output contract for one assembled executable.
 // Filename conventions belong here; build and archive code use the named fields.
 type artifactSet struct {
-	Binary         artifact
-	Provenance     artifact
-	Licenses       artifact
-	GoMod          artifact
-	GoSum          artifact
-	RuntimePatches artifact
+	Binary     artifact
+	Provenance artifact
+	Licenses   artifact
+	GoMod      artifact
+	GoSum      artifact
 }
 
 func artifactsFor(binary string) artifactSet {
 	return artifactSet{
-		Binary:         artifact{Name: "binary", Path: binary},
-		Provenance:     artifact{Name: "provenance", Path: binary + ".provenance.json"},
-		Licenses:       artifact{Name: "licenses", Path: binary + ".LICENSES.txt"},
-		GoMod:          artifact{Name: "go.mod", Path: binary + ".go.mod"},
-		GoSum:          artifact{Name: "go.sum", Path: binary + ".go.sum"},
-		RuntimePatches: artifact{Name: "runtime-patches", Path: binary + ".runtime-patches.tar.gz"},
+		Binary:     artifact{Name: "binary", Path: binary},
+		Provenance: artifact{Name: "provenance", Path: binary + ".provenance.json"},
+		Licenses:   artifact{Name: "licenses", Path: binary + ".LICENSES.txt"},
+		GoMod:      artifact{Name: "go.mod", Path: binary + ".go.mod"},
+		GoSum:      artifact{Name: "go.sum", Path: binary + ".go.sum"},
 	}
 }
 
 // recorded returns files whose content is bound by the provenance record.
 func (set artifactSet) recorded() []artifact {
-	return []artifact{set.Binary, set.Licenses, set.GoMod, set.GoSum, set.RuntimePatches}
+	return []artifact{set.Binary, set.Licenses, set.GoMod, set.GoSum}
 }
 func (set artifactSet) all() []artifact { return append(set.recorded(), set.Provenance) }
 
