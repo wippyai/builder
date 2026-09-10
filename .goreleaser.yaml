@@ -18,6 +18,7 @@ archives:
         formats: [zip]
     files:
       - LICENSE
+      - THIRD_PARTY_NOTICES.txt
       - README.md
 checksum:
   name_template: SHA256SUMS

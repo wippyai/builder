@@ -10,9 +10,8 @@ packs, and native Go components. The generated entry point calls Wippy's
 [Quick start](#quick-start) · [Commands](#commands) · [GitHub Actions](#github-actions) · [SDK](docs/SDK.md) · [Documentation](docs/README.md)
 
 **Alpha.** CLI checks cover Linux, macOS and Windows on amd64 and arm64.
-Standalone application acceptance runs on Linux amd64. The runtime host APIs are implemented in upstream PRs
-[667](https://github.com/wippyai/runtime/pull/667) and
-[668](https://github.com/wippyai/runtime/pull/668), pending review and merge.
+Standalone application acceptance runs on Linux amd64. The example pins merged
+upstream Wippy with its application host and native component APIs.
 
 ## Quick start
 
@@ -43,7 +42,7 @@ the same assembly path.
 
 | Input | Selected by the manifest |
 |---|---|
-| Runtime | Git commit, Go version, build tags, and checksummed patches |
+| Runtime | Git commit, Go version and build tags |
 | Application | Module identity, command, base/bootstrap mode, and data paths |
 | Packs | Exact module versions, local pack files, and SHA-256 checksums |
 | Native components | Go module versions, import paths, and exported boot factories |
@@ -68,7 +67,8 @@ covers both paths, including filesystem notifications and argument forwarding.
 | `build MANIFEST --output PATH` | Assemble the standalone application |
 | `package BINARY --output ARCHIVE` | Verify and archive the build artifacts |
 
-Run `wippy-builder COMMAND --help` for flags. Status output uses terminal colors
+Run `wippy-builder COMMAND --help` for flags and examples. Successful commands
+report the manifest or output path on stderr. Status output uses terminal colors
 and honors `NO_COLOR`; redirected logs remain plain text.
 
 `pack` prepares one self-contained source root. Multi-module builds supply
@@ -76,13 +76,19 @@ independently prepared dependency packs. Private native modules set `private: tr
 and use the host's Git credentials. `WIPPY_BUILD_RUNTIME_REPOSITORY` can
 select a local Git mirror; the manifest commit still determines the source.
 
+Go's normal module and compilation caches are reused across builds. Set
+`GOMODCACHE` and `GOCACHE` to user-owned absolute directories to share them across
+local checkouts. Runtime source is staged per build; the optional Git mirror
+avoids repeatedly downloading it. GitHub workflows currently use runner-local
+caches without uploading cache archives, keeping Actions cache storage unused.
+
 ## GitHub Actions
 
 With packs prepared and their checksums recorded, add this step after checkout:
 
 ```yaml
 - name: Build application
-  uses: wippyai/builder@fe458f77bdfc09e7cc3baa7da0a9482aa71638d5
+  uses: wippyai/builder@e80e35b6f9301ca01a366b4d1de3eddcf8f3e97d
   with:
     manifest: wippy.build.json
     output: dist/my-app
@@ -104,7 +110,7 @@ dist/wippy-builder package dist/hello --output dist/hello-linux-amd64.tar.gz
 ```
 
 The archive contains the executable, provenance, effective `go.mod` and `go.sum`,
-available dependency notices, and runtime patch sources. A separate SHA-256 file
+and available dependency notices. A separate SHA-256 file
 covers the archive.
 
 Provenance records the manifest, assembler revision, source modification status,
@@ -143,7 +149,8 @@ for ownership, validation, and remaining release work.
 ## License
 
 Builder is [MIT licensed](LICENSE). Applications, Wippy, and native dependencies
-retain their own licenses. The generated notice inventory lists missing root
+retain their own licenses. CLI archives include [dependency notices](THIRD_PARTY_NOTICES.txt).
+The generated application notice inventory lists missing root
 license files for review before public distribution.
 
 [Contributing](CONTRIBUTING.md) · [Code of conduct](https://github.com/wippyai/.github/blob/main/.github/CODE_OF_CONDUCT.md) · [Security](SECURITY.md)

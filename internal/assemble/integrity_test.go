@@ -2,12 +2,14 @@
 package assemble
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -89,14 +91,25 @@ func TestGitEnvironmentDoesNotRedirectBuildRepositories(t *testing.T) {
 }
 func TestRejectsDuplicateBuildInputs(t *testing.T) {
 	m := fixture()
-	m.Runtime.Patches = []Input{{Path: m.Application.Packs[0].Path, SHA256: m.Application.Packs[0].SHA256}}
+	duplicate := m.Application.Packs[0]
+	duplicate.Module = "example/dependency"
+	duplicate.Path = "./" + duplicate.Path
+	m.Application.Packs = append(m.Application.Packs, duplicate)
 	if m.Validate() == nil {
-		t.Fatal("accepted pack and patch sharing an input path")
+		t.Fatal("accepted two packs sharing an input path")
 	}
-	m = fixture()
-	m.Runtime.Patches = []Input{{Path: "runtime.patch", SHA256: m.Application.Packs[0].SHA256}, {Path: "./runtime.patch", SHA256: m.Application.Packs[0].SHA256}}
-	if m.Validate() == nil {
-		t.Fatal("accepted duplicate patch paths")
+}
+
+func TestRejectsRuntimePatches(t *testing.T) {
+	for _, patches := range []string{`[]`, `[{"path":"runtime.patch","sha256":"` + strings.Repeat("a", 64) + `"}]`} {
+		data, err := json.Marshal(fixture())
+		must(t, err)
+		data = []byte(strings.Replace(string(data), `"runtime":{`, `"runtime":{"patches":`+patches+`,`, 1))
+		path := filepath.Join(t.TempDir(), "wippy.build.json")
+		must(t, os.WriteFile(path, data, 0644))
+		if _, err := ReadManifest(path); err == nil || !strings.Contains(err.Error(), `unknown field "patches"`) {
+			t.Fatalf("expected runtime patches to be rejected, got %v", err)
+		}
 	}
 }
 
