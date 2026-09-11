@@ -200,7 +200,13 @@ func TestHub(t *testing.T) {
 	// silently turn this CI gate into a successful no-op.
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
-	c := exec.CommandContext(ctx, "go", "test", "-json", "-tags", strings.Join(m.Runtime.Tags, ","), "./application", "-run", "^TestHubBinaryUpdate$", "-count=1")
+	applicationPackage := "./cmd/app"
+	if _, err := os.Stat(filepath.Join(source, "cmd", "app", "run.go")); os.IsNotExist(err) {
+		applicationPackage = "./application"
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	c := exec.CommandContext(ctx, "go", "test", "-json", "-tags", strings.Join(m.Runtime.Tags, ","), applicationPackage, "-run", "^TestHubBinaryUpdate$", "-count=1")
 	c.Dir = source
 	c.Env = env
 	var stderr bytes.Buffer

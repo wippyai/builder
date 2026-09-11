@@ -32,11 +32,12 @@ type Runtime struct {
 	Patches    []Input  `json:"patches,omitempty"`
 }
 type Application struct {
-	Module  string            `json:"module"`
-	Command string            `json:"command"`
-	Mode    string            `json:"mode"`
-	DataEnv map[string]string `json:"data_env,omitempty"`
-	Packs   []Pack            `json:"packs"`
+	Baseline string            `json:"baseline,omitempty"`
+	Module   string            `json:"module"`
+	Command  string            `json:"command"`
+	Mode     string            `json:"mode"`
+	DataEnv  map[string]string `json:"data_env,omitempty"`
+	Packs    []Pack            `json:"packs"`
 }
 type Native struct {
 	Module  string `json:"module"`
@@ -44,6 +45,7 @@ type Native struct {
 	Package string `json:"package"`
 	Factory string `json:"factory"`
 	Private bool   `json:"private,omitempty"`
+	Launch  bool   `json:"launch,omitempty"`
 }
 type Manifest struct {
 	Schema      int         `json:"schema"`
@@ -131,6 +133,9 @@ func (m *Manifest) Validate() error {
 		paths[filepath.Clean(patch.Path)] = true
 	}
 	app := m.Application
+	if app.Baseline != "" && app.Baseline != "activated" && app.Baseline != "embedded" {
+		return fmt.Errorf("application baseline must be activated or embedded")
+	}
 	if !matches(modulePattern, app.Module) || app.Command == "" || (app.Mode != "base" && app.Mode != "bootstrap") {
 		return fmt.Errorf("invalid application identity, command or mode")
 	}
@@ -154,11 +159,18 @@ func (m *Manifest) Validate() error {
 		}
 	}
 	modules = map[string]bool{}
+	launchers := 0
 	for _, n := range m.Native {
+		if n.Launch {
+			launchers++
+		}
 		if !validImportPath(n.Module) || modules[n.Module] || !matches(`v`+versionPattern, n.Version) || !matches(`[A-Z][A-Za-z0-9_]*`, n.Factory) || !validImportPath(n.Package) || (n.Package != n.Module && !strings.HasPrefix(n.Package, n.Module+"/")) {
 			return fmt.Errorf("invalid or duplicate native component %q", n.Module)
 		}
 		modules[n.Module] = true
+	}
+	if launchers > 1 {
+		return fmt.Errorf("only one native factory may supply application launch")
 	}
 	return nil
 }
