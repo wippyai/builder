@@ -116,7 +116,23 @@ func prepareSource(stage string, m *Manifest, inputs map[string]string, toolchai
 			}
 		}
 	}
-	generated, err := Generate(m, toolchain)
+	applicationPackage := "github.com/wippyai/runtime/cmd/app"
+	if !toolchain {
+		if _, err := os.Stat(filepath.Join(source, "cmd", "app", "run.go")); os.IsNotExist(err) {
+			applicationPackage = "github.com/wippyai/runtime/application"
+			if m.Application.Baseline != "" {
+				return "", fmt.Errorf("selected runtime predates application baseline selection")
+			}
+			for _, native := range m.Native {
+				if native.Launch {
+					return "", fmt.Errorf("selected runtime predates explicit application launch")
+				}
+			}
+		} else if err != nil {
+			return "", err
+		}
+	}
+	generated, err := generate(m, toolchain, applicationPackage)
 	if err != nil {
 		return "", err
 	}
