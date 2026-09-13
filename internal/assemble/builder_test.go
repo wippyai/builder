@@ -49,6 +49,96 @@ func TestManifest(t *testing.T) {
 		t.Fatal("unknown manifest key accepted")
 	}
 }
+func TestNativeComponentComposition(t *testing.T) {
+	m := fixture()
+	m.Native = []Native{
+		{Module: "example.com/native", Version: "v1.0.0", Package: "example.com/native/desktop", Factory: "Desktop"},
+		{Module: "example.com/native", Version: "v1.0.0", Package: "example.com/native/docker", Factory: "Docker"},
+	}
+	must(t, m.Validate())
+	source, err := Generate(&m, true)
+	must(t, err)
+	if bytes.Count(source, []byte(`native0 "example.com/native/desktop"`)) != 1 || bytes.Count(source, []byte(`native1 "example.com/native/docker"`)) != 1 {
+		t.Fatalf("same-module native packages were not imported once:\n%s", source)
+	}
+	if bytes.Count(source, []byte("native0.Desktop()")) != 1 || bytes.Count(source, []byte("native1.Docker()")) != 1 || !bytes.Contains(source, []byte("[]boot.Component{component0, component1}")) {
+		t.Fatalf("same-module native factories were not composed:\n%s", source)
+	}
+	sharedPackage := fixture()
+	sharedPackage.Native = []Native{
+		{Module: "example.com/native", Version: "v1.0.0", Package: "example.com/native/component", Factory: "Desktop"},
+		{Module: "example.com/native", Version: "v1.0.0", Package: "example.com/native/component", Factory: "Docker"},
+	}
+	must(t, sharedPackage.Validate())
+	sharedSource, sharedError := Generate(&sharedPackage, true)
+	must(t, sharedError)
+	if bytes.Count(sharedSource, []byte(`native0 "example.com/native/component"`)) != 1 || bytes.Count(sharedSource, []byte("native0.Desktop()")) != 1 || bytes.Count(sharedSource, []byte("native0.Docker()")) != 1 || !bytes.Contains(sharedSource, []byte("[]boot.Component{component0, component1}")) {
+		t.Fatalf("shared native package imports or factories were not deduplicated:\n%s", sharedSource)
+	}
+	conflicting := sharedPackage
+	conflicting.Native = append([]Native{}, m.Native...)
+	conflicting.Native[1].Version = "v1.1.0"
+	if err := conflicting.Validate(); err == nil || !strings.Contains(err.Error(), "conflicting versions") {
+		t.Fatalf("conflicting native module version accepted: %v", err)
+	}
+	duplicate := sharedPackage
+	duplicate.Native = append([]Native{}, sharedPackage.Native...)
+	duplicate.Native[1].Factory = duplicate.Native[0].Factory
+	if err := duplicate.Validate(); err == nil || !strings.Contains(err.Error(), "duplicate native package and factory") {
+		t.Fatalf("duplicate native package/factory accepted: %v", err)
+	}
+}
+func TestGeneratedNativeComponentsCompileAndRunOffline(t *testing.T) {
+	root := t.TempDir()
+	for _, directory := range []string{"packs", "native/desktop", "native/docker", "native/shared", "runtime/api/boot", "runtime/cmd/app"} {
+		must(t, os.MkdirAll(filepath.Join(root, directory), 0700))
+	}
+	must(t, os.WriteFile(filepath.Join(root, "go.mod"), []byte("module fixture/app\n\ngo 1.27.0\n\nrequire (\n\texample.com/native v1.0.0\n\tgithub.com/wippyai/runtime v1.0.0\n)\n\nreplace example.com/native => ./native\nreplace github.com/wippyai/runtime => ./runtime\n"), 0600))
+	must(t, os.WriteFile(filepath.Join(root, "packs/0.wapp"), []byte("fixture"), 0600))
+	must(t, os.WriteFile(filepath.Join(root, "native/go.mod"), []byte("module example.com/native\n\ngo 1.27.0\n\nrequire github.com/wippyai/runtime v1.0.0\n\nreplace github.com/wippyai/runtime => ../runtime\n"), 0600))
+	must(t, os.WriteFile(filepath.Join(root, "runtime/go.mod"), []byte("module github.com/wippyai/runtime\n\ngo 1.27.0\n"), 0600))
+	must(t, os.WriteFile(filepath.Join(root, "runtime/api/boot/boot.go"), []byte("package boot\n\ntype Component interface{}\n"), 0600))
+	must(t, os.WriteFile(filepath.Join(root, "runtime/cmd/app/application.go"), []byte(`package application
+
+import (
+	"context"
+	"fmt"
+	"github.com/wippyai/runtime/api/boot"
+)
+
+type Pack struct { Module, Version, Digest string; Data []byte }
+type Bundle struct { Root string; Packs []Pack }
+type Options struct { Name, Command, Mode string; Components []boot.Component; DataEnv map[string]string; Bundle Bundle }
+func Run(_ context.Context, options Options, _ []string) error {
+	fmt.Printf("components=%d\n", len(options.Components))
+	for _, component := range options.Components { fmt.Printf("%v\n", component) }
+	return nil
+}
+`), 0600))
+	must(t, os.WriteFile(filepath.Join(root, "native/desktop/desktop.go"), []byte("package desktop\n\nimport \"github.com/wippyai/runtime/api/boot\"\n\nfunc Desktop() boot.Component { return \"desktop\" }\n"), 0600))
+	must(t, os.WriteFile(filepath.Join(root, "native/docker/docker.go"), []byte("package docker\n\nimport \"github.com/wippyai/runtime/api/boot\"\n\nfunc Docker() boot.Component { return \"docker\" }\n"), 0600))
+	must(t, os.WriteFile(filepath.Join(root, "native/shared/shared.go"), []byte("package shared\n\nimport \"github.com/wippyai/runtime/api/boot\"\n\nfunc Desktop() boot.Component { return \"shared-desktop\" }\n\nfunc Docker() boot.Component { return \"shared-docker\" }\n"), 0600))
+	m := fixture()
+	m.Native = []Native{
+		{Module: "example.com/native", Version: "v1.0.0", Package: "example.com/native/desktop", Factory: "Desktop"},
+		{Module: "example.com/native", Version: "v1.0.0", Package: "example.com/native/docker", Factory: "Docker"},
+		{Module: "example.com/native", Version: "v1.0.0", Package: "example.com/native/shared", Factory: "Desktop"},
+		{Module: "example.com/native", Version: "v1.0.0", Package: "example.com/native/shared", Factory: "Docker"},
+	}
+	source, err := Generate(&m, false)
+	must(t, err)
+	must(t, os.WriteFile(filepath.Join(root, "main.go"), source, 0600))
+	command := exec.Command("go", "run", ".")
+	command.Dir = root
+	command.Env = append(os.Environ(), "GOWORK=off", "GOPROXY=off", "GOSUMDB=off", "GOTOOLCHAIN=local")
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("offline generated application failed: %v\n%s", err, output)
+	}
+	if string(output) != "components=4\ndesktop\ndocker\nshared-desktop\nshared-docker\n" {
+		t.Fatalf("generated application received unexpected components: %q", output)
+	}
+}
 func TestGeneratedSource(t *testing.T) {
 	m := fixture()
 	m.Application.Command = "hello\"; panic(\"injected\") //"

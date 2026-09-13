@@ -72,9 +72,9 @@ actually published the named version:
 ```
 
 The builder verifies the package's actual Go module and selected version. Set
-`private: true` for a private module. The current schema selects one component
-factory per Go module; a module containing several services can export one
-composing component. Every factory call must create its own service state.
+`private: true` for a private module. A manifest may select multiple unique
+package and factory entries from the same module version. Every factory call
+must create its own service state.
 
 Use these runtime-owned primitives:
 
