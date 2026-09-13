@@ -17,10 +17,15 @@ type goPackage struct {
 }
 
 func prepareDependencies(source string, env []string, m *Manifest) error {
+	modules := map[string]bool{}
 	for _, component := range m.Native {
+		if modules[component.Module] {
+			continue
+		}
 		if err := run(source, env, "go", "mod", "edit", "-require="+component.Module+"@"+component.Version); err != nil {
 			return err
 		}
+		modules[component.Module] = true
 	}
 	if len(m.Native) > 0 {
 		if err := run(source, env, "go", "mod", "tidy"); err != nil {

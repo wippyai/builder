@@ -158,16 +158,25 @@ func (m *Manifest) Validate() error {
 			return fmt.Errorf("invalid data environment binding %q", name)
 		}
 	}
-	modules = map[string]bool{}
 	launchers := 0
+	nativeModules := map[string]string{}
+	nativeComponents := map[string]bool{}
 	for _, n := range m.Native {
 		if n.Launch {
 			launchers++
 		}
-		if !validImportPath(n.Module) || modules[n.Module] || !matches(`v`+versionPattern, n.Version) || !matches(`[A-Z][A-Za-z0-9_]*`, n.Factory) || !validImportPath(n.Package) || (n.Package != n.Module && !strings.HasPrefix(n.Package, n.Module+"/")) {
-			return fmt.Errorf("invalid or duplicate native component %q", n.Module)
+		if !validImportPath(n.Module) || !matches(`v`+versionPattern, n.Version) || !matches(`[A-Z][A-Za-z0-9_]*`, n.Factory) || !validImportPath(n.Package) || (n.Package != n.Module && !strings.HasPrefix(n.Package, n.Module+"/")) {
+			return fmt.Errorf("invalid native component %q", n.Module)
 		}
-		modules[n.Module] = true
+		if version, exists := nativeModules[n.Module]; exists && version != n.Version {
+			return fmt.Errorf("native module %q has conflicting versions %s and %s", n.Module, version, n.Version)
+		}
+		component := n.Package + "\x00" + n.Factory
+		if nativeComponents[component] {
+			return fmt.Errorf("duplicate native package and factory %q", n.Package)
+		}
+		nativeModules[n.Module] = n.Version
+		nativeComponents[component] = true
 	}
 	if launchers > 1 {
 		return fmt.Errorf("only one native factory may supply application launch")

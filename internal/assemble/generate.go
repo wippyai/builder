@@ -22,9 +22,19 @@ func generate(m *Manifest, toolchain bool, applicationPackage string) ([]byte, e
 		fmt.Fprintf(&s, "_ \"embed\"\napplication %q\n", applicationPackage)
 	}
 	var factories []string
+	packageAliases := map[string]string{}
+	var packages []string
 	for i, n := range m.Native {
-		fmt.Fprintf(&s, "native%d %q\n", i, n.Package)
+		alias, exists := packageAliases[n.Package]
+		if !exists {
+			alias = fmt.Sprintf("native%d", len(packages))
+			packageAliases[n.Package] = alias
+			packages = append(packages, n.Package)
+		}
 		factories = append(factories, fmt.Sprintf("component%d", i))
+	}
+	for i, packagePath := range packages {
+		fmt.Fprintf(&s, "native%d %q\n", i, packagePath)
 	}
 	s.WriteString(")\n")
 	if !toolchain {
@@ -34,7 +44,7 @@ func generate(m *Manifest, toolchain bool, applicationPackage string) ([]byte, e
 	}
 	s.WriteString("func main() {\n")
 	for i, n := range m.Native {
-		fmt.Fprintf(&s, "component%d := native%d.%s()\n", i, i, n.Factory)
+		fmt.Fprintf(&s, "component%d := %s.%s()\n", i, packageAliases[n.Package], n.Factory)
 	}
 	if toolchain {
 		s.WriteString(`directory, err := os.Getwd()
