@@ -18,7 +18,7 @@ func TestExplicitApplicationLaunchComposition(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := string(code)
-	for _, required := range []string{`application "github.com/wippyai/runtime/cmd/app"`, "component0 := native0.New()", "component0.Launch", `"embedded"`, "[]boot.Component{component0}"} {
+	for _, required := range []string{`application "github.com/wippyai/runtime/cmd/app"`, "component0 := native0.New()", "component0.Launch", "component0.DefaultStateDir", `"embedded"`, "[]boot.Component{component0}"} {
 		if !strings.Contains(source, required) {
 			t.Fatalf("generated composition lacks %q:\n%s", required, source)
 		}
@@ -30,7 +30,7 @@ func TestExplicitApplicationLaunchComposition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(toolchain), "component0.Launch") || strings.Contains(string(toolchain), "Baseline:") {
+	if strings.Contains(string(toolchain), "component0.Launch") || strings.Contains(string(toolchain), "component0.DefaultStateDir") || strings.Contains(string(toolchain), "Baseline:") {
 		t.Fatal("runtime tooling acquired application launch policy")
 	}
 }

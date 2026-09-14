@@ -65,7 +65,7 @@ func generate(m *Manifest, toolchain bool, applicationPackage string) ([]byte, e
 		}
 		for i, n := range m.Native {
 			if n.Launch {
-				fmt.Fprintf(&s, "Launch: component%d.Launch,\n", i)
+				fmt.Fprintf(&s, "Launch: component%d.Launch,\nDefaultStateDir: component%d.DefaultStateDir,\n", i, i)
 			}
 		}
 		s.WriteString("DataEnv: map[string]string{")
