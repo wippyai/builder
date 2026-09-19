@@ -91,6 +91,15 @@ func TestGitEnvironmentDoesNotRedirectBuildRepositories(t *testing.T) {
 		t.Fatalf("unexpected Git environment: %v", env)
 	}
 }
+
+func TestExecutableLintArgs(t *testing.T) {
+	state := filepath.Join(t.TempDir(), "validation-state")
+	want := []string{"--state", state, "wippy", "lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"}
+	if got := executableLintArgs(state); !slices.Equal(got, want) {
+		t.Fatalf("embedded validation arguments = %q, want %q", got, want)
+	}
+}
+
 func TestRejectsDuplicateBuildInputs(t *testing.T) {
 	m := fixture()
 	m.Runtime.Patches = []Input{{Path: m.Application.Packs[0].Path, SHA256: m.Application.Packs[0].SHA256}}

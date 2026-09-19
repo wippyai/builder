@@ -49,7 +49,7 @@ func Build(manifestPath, output string, toolchain bool) error {
 		return err
 	}
 	if !toolchain {
-		args := append([]string{"--state-dir", filepath.Join(stage, "validation-state"), "runtime"}, strictLintArgs()...)
+		args := executableLintArgs(filepath.Join(stage, "validation-state"))
 		if err = run(stage, env, binary, args...); err != nil {
 			return fmt.Errorf("validate embedded application: %w", err)
 		}
@@ -59,6 +59,10 @@ func Build(manifestPath, output string, toolchain bool) error {
 
 func strictLintArgs() []string {
 	return []string{"lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"}
+}
+
+func executableLintArgs(state string) []string {
+	return append([]string{"--state", state, "wippy"}, strictLintArgs()...)
 }
 
 func freezeInputs(manifestPath string, m *Manifest, outputs artifactSet, stage string, toolchain bool) (map[string]string, error) {
