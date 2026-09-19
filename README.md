@@ -1,17 +1,19 @@
-![Wippy Builder](docs/assets/banner.svg)
+![Wippy Builder — standalone applications from pinned inputs](docs/assets/banner.png)
+
+# Wippy Builder
 
 [![Build checks](https://github.com/wippyai/builder/actions/workflows/check.yml/badge.svg)](https://github.com/wippyai/builder/actions/workflows/check.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-edbd59)](LICENSE)
 
 Build a standalone Wippy executable from a pinned runtime, versioned application
-packs, and native Go components. The generated entry point calls Wippy's
-`application.Run` API.
+packs, and native Go components. The generated entry point declares one
+`app.Executable` and runs it through Wippy's application runner.
 
-[Quick start](#quick-start) · [Commands](#commands) · [GitHub Actions](#github-actions) · [SDK](docs/SDK.md) · [Documentation](docs/README.md)
+[Quick start](#quick-start) · [Build inputs](#build-inputs) · [GitHub Actions](#github-actions) · [SDK](docs/SDK.md)
 
-**Alpha.** CLI checks cover Linux, macOS and Windows on amd64 and arm64.
-Standalone application acceptance runs on Linux amd64. The example pins merged
-upstream Wippy with its application host and native component APIs.
+**Development preview.** Linux amd64 assembly and executable acceptance are
+verified. The executable model is implemented in upstream runtime
+[PR 787](https://github.com/wippyai/runtime/pull/787), pending review and merge.
 
 ## Quick start
 
@@ -42,8 +44,8 @@ the same assembly path.
 
 | Input | Selected by the manifest |
 |---|---|
-| Runtime | Git commit, Go version and build tags |
-| Application | Module identity, command, base/bootstrap mode, and data paths |
+| Runtime | Git commit, Go version, build tags, and checksummed patches |
+| Application | Module identity, command, and state-relative data paths |
 | Packs | Exact module versions, local pack files, and SHA-256 checksums |
 | Native components | Go module versions, import paths, and exported boot factories |
 
@@ -67,8 +69,7 @@ covers both paths, including filesystem notifications and argument forwarding.
 | `build MANIFEST --output PATH` | Assemble the standalone application |
 | `package BINARY --output ARCHIVE` | Verify and archive the build artifacts |
 
-Run `wippy-builder COMMAND --help` for flags and examples. Successful commands
-report the manifest or output path on stderr. Status output uses terminal colors
+Run `wippy-builder COMMAND --help` for flags. Status output uses terminal colors
 and honors `NO_COLOR`; redirected logs remain plain text.
 
 `pack` prepares one self-contained source root. Multi-module builds supply
@@ -76,19 +77,13 @@ independently prepared dependency packs. Private native modules set `private: tr
 and use the host's Git credentials. `WIPPY_BUILD_RUNTIME_REPOSITORY` can
 select a local Git mirror; the manifest commit still determines the source.
 
-Go's normal module and compilation caches are reused across builds. Set
-`GOMODCACHE` and `GOCACHE` to user-owned absolute directories to share them across
-local checkouts. Runtime source is staged per build; the optional Git mirror
-avoids repeatedly downloading it. GitHub workflows currently use runner-local
-caches without uploading cache archives, keeping Actions cache storage unused.
-
 ## GitHub Actions
 
 With packs prepared and their checksums recorded, add this step after checkout:
 
 ```yaml
 - name: Build application
-  uses: wippyai/builder@e80e35b6f9301ca01a366b4d1de3eddcf8f3e97d
+  uses: wippyai/builder@6e2852f063f833fdcee9b6a2f63ccee6d8523e01
   with:
     manifest: wippy.build.json
     output: dist/my-app
@@ -99,8 +94,8 @@ the native development runtime. Its `builder` output provides the assembler path
 for subsequent packaging steps. Private dependencies can use the `token` input.
 
 The [example workflow](.github/workflows/check.yml) demonstrates toolchain and pack
-preparation, offline execution, Hub updates, base/bootstrap checks, and packaging.
-Bee's [release workflow](https://github.com/wippyai/bee/blob/main/.github/workflows/native.yml)
+preparation, offline execution, Hub updates, embedded recovery, and packaging.
+Bee's [release workflow](https://github.com/wippyai/bee/blob/feat/native-ioevents/.github/workflows/native.yml)
 adds desktop acceptance and tag-triggered draft releases.
 
 ## Release artifacts
@@ -110,7 +105,7 @@ dist/wippy-builder package dist/hello --output dist/hello-linux-amd64.tar.gz
 ```
 
 The archive contains the executable, provenance, effective `go.mod` and `go.sum`,
-and available dependency notices. A separate SHA-256 file
+available dependency notices, and runtime patch sources. A separate SHA-256 file
 covers the archive.
 
 Provenance records the manifest, assembler revision, source modification status,
@@ -120,18 +115,15 @@ binary bytes also depend on pack timestamps and the C toolchain.
 
 ## Updates
 
-Hub updates replace the installed application pack graph. Base mode provides
-explicit recovery from embedded code; bootstrap mode seeds only the first
-deployment. Application databases retain their normal migration checks.
+Hub updates replace the installed application pack graph. The `recover`
+operation starts a fresh deployment from the embedded graph. Application
+databases retain their normal migration checks.
 
 Native changes require a new executable. The runtime update gate checks Lua
 exports and types against the compiled modules. Semantic native-version
-requirements and application acceptance beyond Linux remain pending.
+requirements and additional platform acceptance remain pending.
 
 ## Development
-
-See [releasing](docs/RELEASING.md) for local archives, platform checks and the
-GitHub draft-release protocol.
 
 ```sh
 make check
@@ -140,7 +132,7 @@ make smoke OUTPUT=dist/hello
 
 `make check` runs race tests, vet, and formatting checks. Executable acceptance
 covers empty-directory boot, exact argument forwarding, Hub updates, restart,
-base recovery, and failed-update preservation.
+embedded recovery, and failed-update preservation.
 
 Code lives in [`cmd/wippy-builder`](cmd/wippy-builder) and
 [`internal/assemble`](internal/assemble). See the [implementation guide](docs/IMPLEMENTATION.md)
@@ -149,8 +141,5 @@ for ownership, validation, and remaining release work.
 ## License
 
 Builder is [MIT licensed](LICENSE). Applications, Wippy, and native dependencies
-retain their own licenses. CLI archives include [dependency notices](THIRD_PARTY_NOTICES.txt).
-The generated application notice inventory lists missing root
+retain their own licenses. The generated notice inventory lists missing root
 license files for review before public distribution.
-
-[Contributing](CONTRIBUTING.md) · [Code of conduct](https://github.com/wippyai/.github/blob/main/.github/CODE_OF_CONDUCT.md) · [Security](SECURITY.md)

@@ -2,7 +2,9 @@
 package assemble
 
 import (
-	"encoding/json"
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"errors"
 	"io"
 	"os"
@@ -89,28 +91,131 @@ func TestGitEnvironmentDoesNotRedirectBuildRepositories(t *testing.T) {
 		t.Fatalf("unexpected Git environment: %v", env)
 	}
 }
-func TestRejectsDuplicateBuildInputs(t *testing.T) {
-	m := fixture()
-	duplicate := m.Application.Packs[0]
-	duplicate.Module = "example/dependency"
-	duplicate.Path = "./" + duplicate.Path
-	m.Application.Packs = append(m.Application.Packs, duplicate)
-	if m.Validate() == nil {
-		t.Fatal("accepted two packs sharing an input path")
+
+func TestExecutableLintArgs(t *testing.T) {
+	state := filepath.Join(t.TempDir(), "validation-state")
+	want := []string{"--state", state, "wippy", "lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"}
+	if got := executableLintArgs(state); !slices.Equal(got, want) {
+		t.Fatalf("embedded validation arguments = %q, want %q", got, want)
 	}
 }
 
-func TestRejectsRuntimePatches(t *testing.T) {
-	for _, patches := range []string{`[]`, `[{"path":"runtime.patch","sha256":"` + strings.Repeat("a", 64) + `"}]`} {
-		data, err := json.Marshal(fixture())
-		must(t, err)
-		data = []byte(strings.Replace(string(data), `"runtime":{`, `"runtime":{"patches":`+patches+`,`, 1))
-		path := filepath.Join(t.TempDir(), "wippy.build.json")
-		must(t, os.WriteFile(path, data, 0644))
-		if _, err := ReadManifest(path); err == nil || !strings.Contains(err.Error(), `unknown field "patches"`) {
-			t.Fatalf("expected runtime patches to be rejected, got %v", err)
-		}
+func TestRejectsDuplicateBuildInputs(t *testing.T) {
+	m := fixture()
+	m.Runtime.Patches = []Input{{Path: m.Application.Packs[0].Path, SHA256: m.Application.Packs[0].SHA256}}
+	if m.Validate() == nil {
+		t.Fatal("accepted pack and patch sharing an input path")
 	}
+	m = fixture()
+	m.Runtime.Patches = []Input{{Path: "runtime.patch", SHA256: m.Application.Packs[0].SHA256}, {Path: "./runtime.patch", SHA256: m.Application.Packs[0].SHA256}}
+	if m.Validate() == nil {
+		t.Fatal("accepted duplicate patch paths")
+	}
+}
+
+func TestRuntimePatchUsesFrozenSource(t *testing.T) {
+	root := t.TempDir()
+	manifestPath := filepath.Join(root, "wippy.build.json")
+	patchPath := filepath.Join(root, "runtime.patch")
+	m := fixture()
+	pack := []byte("pack")
+	must(t, os.WriteFile(filepath.Join(root, m.Application.Packs[0].Path), pack, 0644))
+	packDigest, err := Digest(filepath.Join(root, m.Application.Packs[0].Path))
+	must(t, err)
+	m.Application.Packs[0].SHA256 = packDigest
+	patch := []byte("original runtime patch")
+	must(t, os.WriteFile(patchPath, patch, 0644))
+	patchDigest, err := Digest(patchPath)
+	must(t, err)
+	m.Runtime.Patches = []Input{{Path: "runtime.patch", SHA256: patchDigest}}
+	must(t, WriteJSON(manifestPath, m))
+	decoded, err := ReadManifest(manifestPath)
+	must(t, err)
+	stage := t.TempDir()
+	inputs, err := freezeInputs(manifestPath, decoded, artifactsFor(filepath.Join(root, "bee")), stage, false)
+	must(t, err)
+	must(t, os.WriteFile(patchPath, []byte("tampered runtime patch"), 0644))
+	archivePath := filepath.Join(root, "patches.tar.gz")
+	must(t, archiveRuntimePatches(decoded.Runtime.Patches, inputs, archivePath))
+
+	compressed, err := gzip.NewReader(bytes.NewReader(mustRead(t, archivePath)))
+	must(t, err)
+	defer compressed.Close()
+	archive := tar.NewReader(compressed)
+	header, err := archive.Next()
+	must(t, err)
+	if header.Name != "0-runtime.patch" {
+		t.Fatalf("unexpected frozen patch name %q", header.Name)
+	}
+	archived, err := io.ReadAll(archive)
+	must(t, err)
+	if !bytes.Equal(archived, patch) {
+		t.Fatalf("archive did not use the verified frozen patch: %q", archived)
+	}
+	if _, err = archive.Next(); err != io.EOF {
+		t.Fatalf("unexpected additional patch archive entry: %v", err)
+	}
+}
+
+func TestPrepareSourceAppliesFrozenRuntimePatch(t *testing.T) {
+	repository := t.TempDir()
+	must(t, run(repository, nil, "git", "init"))
+	must(t, os.MkdirAll(filepath.Join(repository, "cmd", "assembled"), 0755))
+	must(t, os.WriteFile(filepath.Join(repository, "runtime.txt"), []byte("before\n"), 0644))
+	must(t, run(repository, nil, "git", "add", "."))
+	must(t, run(repository, nil, "git", "-c", "user.email=test@example.com", "-c", "user.name=Test", "commit", "-m", "runtime"))
+	commit, err := capture(repository, nil, "git", "rev-parse", "HEAD")
+	must(t, err)
+
+	root := t.TempDir()
+	manifestPath := filepath.Join(root, "wippy.build.json")
+	patchPath := filepath.Join(root, "runtime.patch")
+	patch := []byte("diff --git a/runtime.txt b/runtime.txt\nindex df967b9..3e75765 100644\n--- a/runtime.txt\n+++ b/runtime.txt\n@@ -1 +1 @@\n-before\n+after\n")
+	must(t, os.WriteFile(patchPath, patch, 0644))
+	patchDigest, err := Digest(patchPath)
+	must(t, err)
+	m := fixture()
+	m.Runtime.Commit = strings.TrimSpace(string(commit))
+	m.Runtime.Patches = []Input{{Path: "runtime.patch", SHA256: patchDigest}}
+	must(t, WriteJSON(manifestPath, m))
+	stage := t.TempDir()
+	inputs, err := freezeInputs(manifestPath, &m, artifactsFor(filepath.Join(root, "bee")), stage, true)
+	must(t, err)
+	must(t, os.WriteFile(patchPath, []byte("invalid patch"), 0644))
+	t.Setenv("WIPPY_BUILD_RUNTIME_REPOSITORY", repository)
+	source, err := prepareSource(stage, &m, inputs, true)
+	must(t, err)
+	patched, err := os.ReadFile(filepath.Join(source, "runtime.txt"))
+	must(t, err)
+	if string(patched) != "after\n" {
+		t.Fatalf("runtime patch was not applied from its frozen source: %q", patched)
+	}
+}
+
+func TestRuntimePatchChecksumBeforeTools(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "manifest.json")
+	m := fixture()
+	packPath := filepath.Join(root, m.Application.Packs[0].Path)
+	must(t, os.WriteFile(packPath, []byte("pack"), 0644))
+	packDigest, err := Digest(packPath)
+	must(t, err)
+	m.Application.Packs[0].SHA256 = packDigest
+	m.Runtime.Patches = []Input{{Path: "runtime.patch", SHA256: strings.Repeat("a", 64)}}
+	must(t, WriteJSON(path, m))
+	must(t, os.WriteFile(filepath.Join(root, "runtime.patch"), []byte("tampered"), 0644))
+	t.Setenv("PATH", "/nonexistent")
+	err = Build(path, filepath.Join(root, "binary"), false)
+	if err == nil || !strings.Contains(err.Error(), "input checksum mismatch: runtime.patch") {
+		t.Fatalf("expected runtime patch checksum preflight, got %v", err)
+	}
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	must(t, err)
+	return data
 }
 
 func TestPackCannotOverwriteManifest(t *testing.T) {
