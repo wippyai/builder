@@ -141,13 +141,22 @@ func (m *Manifest) Validate() error {
 			return fmt.Errorf("invalid data environment binding %q", name)
 		}
 	}
-	modules = map[string]bool{}
+	moduleVersions := map[string]string{}
+	components := map[string]bool{}
 	hosts := 0
 	for _, n := range m.Native {
-		if !validImportPath(n.Module) || modules[n.Module] || !matches(`v`+versionPattern, n.Version) || !matches(`[A-Z][A-Za-z0-9_]*`, n.Factory) || !validImportPath(n.Package) || (n.Package != n.Module && !strings.HasPrefix(n.Package, n.Module+"/")) {
-			return fmt.Errorf("invalid or duplicate native component %q", n.Module)
+		if !validImportPath(n.Module) || !matches(`v`+versionPattern, n.Version) || !matches(`[A-Z][A-Za-z0-9_]*`, n.Factory) || !validImportPath(n.Package) || (n.Package != n.Module && !strings.HasPrefix(n.Package, n.Module+"/")) {
+			return fmt.Errorf("invalid native component %q", n.Module)
 		}
-		modules[n.Module] = true
+		if version, ok := moduleVersions[n.Module]; ok && version != n.Version {
+			return fmt.Errorf("native module %q has conflicting versions", n.Module)
+		}
+		component := n.Package + "\x00" + n.Factory
+		if components[component] {
+			return fmt.Errorf("duplicate native component %q", n.Package)
+		}
+		moduleVersions[n.Module] = n.Version
+		components[component] = true
 		if n.Host {
 			hosts++
 		}

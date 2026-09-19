@@ -55,6 +55,57 @@ func TestManifest(t *testing.T) {
 		t.Fatal("unknown manifest key accepted")
 	}
 }
+
+func TestNativeComponentsShareModuleVersion(t *testing.T) {
+	m := fixture()
+	m.Native = []Native{
+		{Module: "example.com/native", Version: "v1.0.0", Package: "example.com/native/desktop", Factory: "Desktop"},
+		{Module: "example.com/native", Version: "v1.0.0", Package: "example.com/native/docker", Factory: "Docker"},
+		{Module: "example.com/native", Version: "v1.0.0", Package: "example.com/native/shared", Factory: "First"},
+		{Module: "example.com/native", Version: "v1.0.0", Package: "example.com/native/shared", Factory: "Second"},
+	}
+	must(t, m.Validate())
+
+	m.Native[3].Version = "v1.1.0"
+	if err := m.Validate(); err == nil || !strings.Contains(err.Error(), "conflicting versions") {
+		t.Fatalf("accepted components with conflicting module versions: %v", err)
+	}
+	m.Native[3].Version = "v1.0.0"
+	m.Native[3].Factory = "First"
+	if err := m.Validate(); err == nil || !strings.Contains(err.Error(), "duplicate native component") {
+		t.Fatalf("accepted duplicate package and factory: %v", err)
+	}
+}
+
+func TestPrepareDependenciesDeduplicatesModuleRequirements(t *testing.T) {
+	root := t.TempDir()
+	log := filepath.Join(root, "calls")
+	fakeGo := filepath.Join(root, "go")
+	script := `#!/bin/sh
+printf '%s\n' "$*" >> "$WIPPY_TEST_GO_CALLS"
+if [ "$1" = list ]; then
+  for argument do package="$argument"; done
+  printf '{"ImportPath":%s,"Module":{"Path":"example.com/native","Version":"v1.0.0"}}\n' "\"$package\""
+fi
+`
+	must(t, os.WriteFile(fakeGo, []byte(script), 0700))
+	t.Setenv("PATH", root)
+	env := setEnv(os.Environ(), "WIPPY_TEST_GO_CALLS", log)
+	m := fixture()
+	m.Native = []Native{
+		{Module: "example.com/native", Version: "v1.0.0", Package: "example.com/native/desktop", Factory: "Desktop"},
+		{Module: "example.com/native", Version: "v1.0.0", Package: "example.com/native/docker", Factory: "Docker"},
+	}
+	must(t, prepareDependencies(root, env, &m))
+	calls, err := os.ReadFile(log)
+	must(t, err)
+	if strings.Count(string(calls), "mod edit -require=example.com/native@v1.0.0") != 1 {
+		t.Fatalf("module requirement was not deduplicated:\n%s", calls)
+	}
+	if strings.Count(string(calls), "list -mod=readonly") != 2 {
+		t.Fatalf("selected packages were not each verified:\n%s", calls)
+	}
+}
 func TestGeneratedSource(t *testing.T) {
 	m := fixture()
 	m.Application.Command = "hello\"; panic(\"injected\") //"
