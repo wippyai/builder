@@ -2,6 +2,7 @@
 package assemble
 
 import (
+	"fmt"
 	"path/filepath"
 	"runtime/debug"
 )
@@ -43,7 +44,7 @@ func builderIdentity() BuilderIdentity {
 	return identity
 }
 
-func exportBuild(source, binary string, outputs artifactSet, m *Manifest, env []string, toolchain bool) error {
+func exportBuild(source, binary string, outputs artifactSet, m *Manifest, inputs map[string]string, env []string, toolchain bool) error {
 	notices, err := licenseNotices(source, binary, env)
 	if err != nil {
 		return err
@@ -60,6 +61,9 @@ func exportBuild(source, binary string, outputs artifactSet, m *Manifest, env []
 	if err = copyFile(filepath.Join(source, "go.sum"), outputs.GoSum.Path, 0644); err != nil {
 		return err
 	}
+	if err = archiveRuntimePatches(m.Runtime.Patches, inputs, outputs.RuntimePatches.Path); err != nil {
+		return err
+	}
 	hashes, err := outputs.hashes()
 	if err != nil {
 		return err
@@ -70,4 +74,12 @@ func exportBuild(source, binary string, outputs artifactSet, m *Manifest, env []
 	}
 	// Write the record last: an incomplete output set cannot pass packaging.
 	return WriteJSON(outputs.Provenance.Path, provenance)
+}
+
+func archiveRuntimePatches(patches []Input, inputs map[string]string, output string) error {
+	files := make([]archiveFile, 0, len(patches))
+	for i, patch := range patches {
+		files = append(files, archiveFile{Path: inputs[patch.Path], Name: fmt.Sprintf("%d-%s", i, filepath.Base(patch.Path))})
+	}
+	return archiveFiles(files, output)
 }

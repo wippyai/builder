@@ -150,7 +150,6 @@ func TestArchiveDeterminismAndTampering(t *testing.T) {
 	must(t, err)
 	provenance := Provenance{Schema: 1, Mode: "application", Manifest: &m, Artifacts: hashes}
 	must(t, WriteJSON(artifacts.Provenance.Path, provenance))
-	must(t, os.WriteFile(binary+".runtime-patches.tar.gz", []byte("obsolete output"), 0644))
 	first, second := filepath.Join(root, "first.tar.gz"), filepath.Join(root, "second.tar.gz")
 	must(t, Package(binary, first))
 	must(t, os.Chtimes(binary, time.Now(), time.Now()))
@@ -175,7 +174,7 @@ func TestArchiveDeterminismAndTampering(t *testing.T) {
 		must(t, err)
 		names = append(names, header.Name)
 	}
-	want := []string{"hello", "hello.LICENSES.txt", "hello.go.mod", "hello.go.sum", "hello.provenance.json"}
+	want := []string{"hello", "hello.LICENSES.txt", "hello.go.mod", "hello.go.sum", "hello.provenance.json", "hello.runtime-patches.tar.gz"}
 	if !slices.Equal(names, want) {
 		t.Fatalf("unexpected release archive contents: %v", names)
 	}
