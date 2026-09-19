@@ -3,9 +3,8 @@
 This is the authoring contract for the pinned development runtime. The runtime
 owns the Go APIs, Lua types, scheduler and boot lifecycle. Builder selects and
 compiles those APIs.
-The application host was merged upstream in runtime PRs
-[667](https://github.com/wippyai/runtime/pull/667) and
-[668](https://github.com/wippyai/runtime/pull/668). Go integrations require the
+The application host is pending upstream in runtime
+[PR 787](https://github.com/wippyai/runtime/pull/787). Go integrations require the
 documented runtime revision.
 
 ## Choose what goes into a pack
@@ -15,9 +14,9 @@ documented runtime revision.
 | Lua application, libraries and UI | Source registry entries and their imports | Versioned application pack |
 | Static UI assets | `wippy.yaml` `embed` selection and filesystem entries | Versioned application pack |
 | Published runtime defaults and profiles | `wippy.yaml` `publish` allow-lists | Versioned application pack |
-| Command, base/bootstrap mode and data paths | `wippy.build.json` `application` | New executable |
+| Command and state-relative data paths | `wippy.build.json` `application` | New executable |
 | Native Go components and their Lua exports | `wippy.build.json` `native` | New executable |
-| Runtime revision and build tags | `wippy.build.json` `runtime` | New executable |
+| Runtime revision, patches and build tags | `wippy.build.json` `runtime` | New executable |
 | User preferences and application databases | Application-owned persistence | Preserved across code updates |
 
 UI composition uses application code and registry configuration. Include the
@@ -41,7 +40,7 @@ publish:
 
 `publish.profiles` selects the profile source and included profile names;
 `publish.runtime.vars` selects publishable variable declarations. Check the
-[runtime configuration contract](https://github.com/wippyai/runtime/blob/fdad09cef2b766e17b95c52c0aa01183601a9243/boot/deps/config/config.go)
+[runtime configuration contract](https://github.com/wippyai/runtime/blob/b8c7a9324256dd40a034f29c4a8b25457587fceb/boot/deps/config/config.go)
 for the exact fields. Runtime-selected deployment and history paths take
 precedence over pack settings. Credentials and machine-specific paths belong in
 host configuration. Application-specific settings need their own typed decoder.
@@ -98,7 +97,9 @@ on registration errors. Use `Start` for activation and `Stop` to cancel and join
 owned work. A shared `ModuleDef` may describe immutable exports; mutable service
 state belongs to the component instance.
 
-The generated entry point passes selected components to `application.Run`.
+The generated entry point passes selected components to `app.Main`. A native
+entry marked `"host": true` is instantiated once and reused as both the
+executable host and a boot component.
 The runtime rejects duplicate component names, including built-in replacements.
 Source tools use the same native selection as the application executable so
 lint and pack generation see the same exports.
@@ -174,9 +175,9 @@ provides these checks through Bee's `make native-check native-binary-check`.
 Host flags precede the operation; application arguments follow `run`:
 
 ```sh
-./dist/my-app --state-dir /path/to/state run --app-option "value with spaces" ""
-./dist/my-app --command another-command run argument
-./dist/my-app runtime run --silent -- another-command argument
+./dist/my-app --state /path/to/state run --app-option "value with spaces" ""
+./dist/my-app --state /path/to/state recover
+./dist/my-app --state /path/to/state wippy run --silent -- another-command argument
 ```
 
 Arguments are forwarded as Go argument slices through the runtime CLI.
@@ -184,7 +185,7 @@ Executable acceptance covers
 empty values, newlines, Unicode, quotes, `--`, and host-looking application flags.
 
 Hub updates replace the selected pack graph, which later boots preserve. They
-cannot install Go code. Base mode allows explicit embedded-code recovery;
-bootstrap only seeds initial state. Neither mode rolls back user databases.
+cannot install Go code. `recover` starts the embedded graph without rolling back
+user databases.
 The update lint gate detects missing exports and incompatible Lua types;
 semantic native-module version requirements are not implemented yet.

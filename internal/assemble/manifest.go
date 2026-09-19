@@ -33,8 +33,7 @@ type Runtime struct {
 type Application struct {
 	Module  string            `json:"module"`
 	Command string            `json:"command"`
-	Mode    string            `json:"mode"`
-	DataEnv map[string]string `json:"data_env,omitempty"`
+	Data    map[string]string `json:"data,omitempty"`
 	Packs   []Pack            `json:"packs"`
 }
 type Native struct {
@@ -43,6 +42,7 @@ type Native struct {
 	Package string `json:"package"`
 	Factory string `json:"factory"`
 	Private bool   `json:"private,omitempty"`
+	Host    bool   `json:"host,omitempty"`
 }
 type Manifest struct {
 	Schema      int         `json:"schema"`
@@ -119,8 +119,8 @@ func (m *Manifest) Validate() error {
 	}
 	paths := make(map[string]bool)
 	app := m.Application
-	if !matches(modulePattern, app.Module) || app.Command == "" || (app.Mode != "base" && app.Mode != "bootstrap") {
-		return fmt.Errorf("invalid application identity, command or mode")
+	if !matches(modulePattern, app.Module) || app.Command == "" {
+		return fmt.Errorf("invalid application identity or command")
 	}
 	modules := map[string]bool{}
 	for _, p := range app.Packs {
@@ -136,17 +136,24 @@ func (m *Manifest) Validate() error {
 	if !modules[app.Module] {
 		return fmt.Errorf("root application pack is missing")
 	}
-	for name, path := range app.DataEnv {
+	for name, path := range app.Data {
 		if !matches(`[A-Z][A-Z0-9_]*`, name) || !local(path) {
 			return fmt.Errorf("invalid data environment binding %q", name)
 		}
 	}
 	modules = map[string]bool{}
+	hosts := 0
 	for _, n := range m.Native {
 		if !validImportPath(n.Module) || modules[n.Module] || !matches(`v`+versionPattern, n.Version) || !matches(`[A-Z][A-Za-z0-9_]*`, n.Factory) || !validImportPath(n.Package) || (n.Package != n.Module && !strings.HasPrefix(n.Package, n.Module+"/")) {
 			return fmt.Errorf("invalid or duplicate native component %q", n.Module)
 		}
 		modules[n.Module] = true
+		if n.Host {
+			hosts++
+		}
+	}
+	if hosts > 1 {
+		return fmt.Errorf("application has more than one native host")
 	}
 	return nil
 }
@@ -157,7 +164,7 @@ func WriteJSON(path string, value any) error {
 	}
 	return atomicWrite(path, append(data, '\n'), 0644)
 }
-func Seal(path, version, mode string) error {
+func Seal(path, version string) error {
 	m, err := ReadManifest(path)
 	if err != nil {
 		return err
@@ -171,9 +178,6 @@ func Seal(path, version, mode string) error {
 		if err != nil {
 			return err
 		}
-	}
-	if mode != "" {
-		m.Application.Mode = mode
 	}
 	if err = m.Validate(); err != nil {
 		return err
@@ -227,5 +231,5 @@ func PackRoot(path, toolchain, version string) error {
 	if err = run(filepath.Dir(path), nil, toolchain, "pack", output, "--meta", "namespace="+strings.Join(parts, "."), "--meta", "name="+parts[1], "--meta", "version="+p.Version, "--silent"); err != nil {
 		return err
 	}
-	return Seal(path, p.Version, "")
+	return Seal(path, p.Version)
 }

@@ -21,7 +21,7 @@ func TestArguments(t *testing.T) {
 	}
 	binary, err := filepath.Abs(binary)
 	must(t, err)
-	values := []string{"--state-dir", "value with spaces\nand a newline", "", "--", "雪", `tail="quoted"'`}
+	values := []string{"--state", "value with spaces\nand a newline", "", "--", "雪", `tail="quoted"'`}
 	var expected strings.Builder
 	for _, value := range values {
 		expected.WriteString(strconv.Itoa(len(value)))
@@ -29,9 +29,9 @@ func TestArguments(t *testing.T) {
 		expected.WriteString(value)
 	}
 	routes := map[string][]string{
-		"application run":       {"--command", "arguments", "run"},
-		"application separator": {"--command", "arguments", "--"},
-		"canonical runtime":     {"runtime", "run", "--silent", "--", "arguments"},
+		"implicit application": {"arguments"},
+		"application run":      {"run", "arguments"},
+		"canonical runtime":    {"wippy", "run", "--silent", "--", "arguments"},
 	}
 	for name, route := range routes {
 		t.Run(name, func(t *testing.T) {
@@ -39,7 +39,7 @@ func TestArguments(t *testing.T) {
 			state := filepath.Join(t.TempDir(), "state")
 			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 			defer cancel()
-			args := append([]string{"--state-dir", state}, route...)
+			args := append([]string{"--state", state}, route...)
 			args = append(args, values...)
 			command := exec.CommandContext(ctx, binary, args...)
 			command.Dir = directory
