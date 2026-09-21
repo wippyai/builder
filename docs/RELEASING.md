@@ -74,9 +74,7 @@ and modification status from Go's VCS build information.
 Signing and Hub publication require separate configuration. Store private keys
 in restricted secret storage; they are never release assets or pack inputs.
 
-The repository is private and its GitHub Action is shared within the Wippy
-organization. Public source and anonymous release downloads require a separate
-repository-visibility change. Release archives remain draft until their platform
-checks and checksums have been reviewed. There is no separate GitHub Pages site.
-See [repository setup](GITHUB.md) for security settings and
+The repository and its GitHub Action are public. Release archives remain draft
+until their platform checks and checksums have been reviewed. There is no separate
+GitHub Pages site. See [repository setup](GITHUB.md) for security settings and
 [contributing](../CONTRIBUTING.md) for review conventions.
