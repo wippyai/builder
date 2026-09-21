@@ -1,7 +1,9 @@
 # GitHub setup
 
-The repository is public. Its documentation entry point is
-[docs/README.md](README.md); no GitHub Pages site is configured.
+The repository is private. Its documentation entry point is
+[docs/README.md](README.md); no GitHub Pages site is configured. The action is
+shared only within the Wippy organization, so public source access and anonymous
+release downloads are unavailable until repository visibility changes.
 
 ## Protection and automation
 
@@ -24,10 +26,10 @@ See [SECURITY.md](../SECURITY.md) for private reports.
 
 ## Credential boundary
 
-Builder has no repository secrets. Its public action accepts a GitHub token for
-private dependency fetching and otherwise uses the caller's workflow token. The
-token is passed through the process environment; manifests and build provenance
-do not record it.
+Builder has no repository secrets. Its action accepts a GitHub token for private
+dependency fetching and otherwise uses the caller's workflow token. The token is
+passed through the process environment; manifests and build provenance do not
+record it.
 
 Checkout steps set `persist-credentials: false`. Write access is limited to
 release jobs that create draft releases. The repositories have no deploy keys or
