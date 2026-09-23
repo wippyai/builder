@@ -12,10 +12,10 @@ on Linux amd64. Both use the same manifest and runtime host API.
 | `examples/hello` | Standalone application and executable acceptance fixture |
 | `action.yml` | Reusable GitHub action |
 | `.github/workflows/check.yml` | Builder tests, application acceptance and archive verification |
-| Runtime `application` package | Embedded deployment, command dispatch, updates and recovery |
+| Runtime `cmd/app` package | Embedded deployment, command dispatch, updates and recovery |
 | Application repository | Lua/UI code, native extensions, permissions and acceptance tests |
 
-The generated entry point calls `application.Run`. Development toolchains call
+The generated entry point calls `app.Main`. Development toolchains call
 `cmd.ExecuteWithOptions`. Runtime boot components register native services and
 typed Lua modules. See the [SDK guide](SDK.md) for the authoring APIs and their
 revision requirements.
@@ -54,9 +54,9 @@ Hub resolver and linter, verifies pack digests and activates the result after
 success. Failed updates retain the previous selection. The advanced
 `runtime update` command modifies the selected deployment directly.
 
-Base mode exposes explicit embedded-code recovery with separate registry
-history. Bootstrap mode seeds initial state. Both preserve application databases;
-the application's migration checks govern compatibility with older code.
+`recover` boots shipped code with separate registry history without changing the
+installed selection. It preserves application databases; the application's
+migration checks govern compatibility with older code.
 Activation requires a restart. Native code changes require a new executable.
 
 ## Validation
@@ -66,8 +66,8 @@ validation, generated source, input protection, exact native dependency ownershi
 atomic file writes, artifact tampering and archive metadata.
 
 Executable acceptance covers source-free boot, exact argument forwarding,
-base/bootstrap behavior, Hub root and dependency updates, cold restart, base
-recovery and failed-update preservation. CI runs first-boot acceptance with
+Hub root and dependency updates, cold restart, recovery and failed-update
+preservation. CI runs first-boot acceptance with
 networking disabled.
 
 Bee's consuming workflow adds typed Lua checks, filesystem permission and event

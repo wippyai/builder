@@ -69,12 +69,6 @@ jobs:
         sudo unshare --net -- env WIPPY_TEST_BINARY="$PWD/dist/hello" ./dist/acceptance -test.run '^Test(Standalone|Arguments)$' -test.v
     - name: Verify canonical Hub updates through the binary
       run: GOWORK=off WIPPY_TEST_BINARY="$PWD/dist/hello" WIPPY_TEST_MANIFEST="$PWD/examples/hello/wippy.build.json" go test ./internal/assemble -run '^TestHub$' -count=1 -v
-    - name: Verify bootstrap mode
-      run: |
-        cp examples/hello/wippy.build.json examples/hello/bootstrap.json
-        dist/wippy-builder seal examples/hello/bootstrap.json --mode bootstrap
-        dist/wippy-builder build examples/hello/bootstrap.json --output dist/hello-bootstrap
-        WIPPY_TEST_BINARY="$PWD/dist/hello-bootstrap" WIPPY_TEST_BOOTSTRAP=1 ./dist/acceptance -test.run '^TestStandalone$' -test.v
     - name: Archive release inputs
       run: dist/wippy-builder package dist/hello --output dist/hello-linux-amd64.tar.gz
     - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

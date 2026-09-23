@@ -30,7 +30,7 @@ and an up-to-date branch. Stale approvals are dismissed. Administrators follow
 the same rules; force pushes and branch deletion are disabled. Merge with squash
 or rebase. The aggregate check requires Linux race/format/vet checks, CLI tests
 on every release platform, and Linux application acceptance covering offline boot,
-argument forwarding, Hub updates and bootstrap mode.
+argument forwarding, Hub updates and recovery.
 
 `make check` includes `make repository-check`: actionlint validates workflows,
 and Gitleaks scans history and current files with redacted output and a Wippy Hub
@@ -57,8 +57,8 @@ their root license documents. Source files such as `license_test.go` are exclude
 Missing source metadata fails the build; missing license documents are listed
 for review. This inventory does not establish licensing for bundled native
 sources with separate terms. Resolve missing notices before public distribution.
-Application source selection and embedded base/bootstrap mode belong to the
-application manifest. Native component updates require rebuilding the executable.
+Application source selection belongs to the application manifest. Native
+component updates require rebuilding the executable.
 
 Packing runs Wippy syntax and strict type checking with the selected development
 toolchain. Application builds run the same checks against the embedded packs
