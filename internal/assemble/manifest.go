@@ -33,7 +33,6 @@ type Runtime struct {
 type Application struct {
 	Module  string            `json:"module"`
 	Command string            `json:"command"`
-	Mode    string            `json:"mode"`
 	DataEnv map[string]string `json:"data_env,omitempty"`
 	Packs   []Pack            `json:"packs"`
 }
@@ -119,8 +118,8 @@ func (m *Manifest) Validate() error {
 	}
 	paths := make(map[string]bool)
 	app := m.Application
-	if !matches(modulePattern, app.Module) || app.Command == "" || (app.Mode != "base" && app.Mode != "bootstrap") {
-		return fmt.Errorf("invalid application identity, command or mode")
+	if !matches(modulePattern, app.Module) || app.Command == "" {
+		return fmt.Errorf("invalid application identity or command")
 	}
 	modules := map[string]bool{}
 	for _, p := range app.Packs {
@@ -157,7 +156,7 @@ func WriteJSON(path string, value any) error {
 	}
 	return atomicWrite(path, append(data, '\n'), 0644)
 }
-func Seal(path, version, mode string) error {
+func Seal(path, version string) error {
 	m, err := ReadManifest(path)
 	if err != nil {
 		return err
@@ -171,9 +170,6 @@ func Seal(path, version, mode string) error {
 		if err != nil {
 			return err
 		}
-	}
-	if mode != "" {
-		m.Application.Mode = mode
 	}
 	if err = m.Validate(); err != nil {
 		return err
@@ -227,5 +223,5 @@ func PackRoot(path, toolchain, version string) error {
 	if err = run(filepath.Dir(path), nil, toolchain, "pack", output, "--meta", "namespace="+strings.Join(parts, "."), "--meta", "name="+parts[1], "--meta", "version="+p.Version, "--silent"); err != nil {
 		return err
 	}
-	return Seal(path, p.Version, "")
+	return Seal(path, p.Version)
 }

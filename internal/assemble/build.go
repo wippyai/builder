@@ -49,7 +49,7 @@ func Build(manifestPath, output string, toolchain bool) error {
 		return err
 	}
 	if !toolchain {
-		args := append([]string{"--state-dir", filepath.Join(stage, "validation-state"), "runtime"}, strictLintArgs()...)
+		args := append([]string{"--state", filepath.Join(stage, "validation-state"), "wippy"}, strictLintArgs()...)
 		if err = run(stage, env, binary, args...); err != nil {
 			return fmt.Errorf("validate embedded application: %w", err)
 		}
