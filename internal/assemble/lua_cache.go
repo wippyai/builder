@@ -8,13 +8,59 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
+
+// Verify each checker profile in fresh state so a previous verification run
+// cannot supply the entries that the embedded seed is expected to provide.
+func verifyLuaCacheSeed(stage, binary string, env []string) error {
+	for _, profile := range []string{"default", "strict", "non-strict"} {
+		state := filepath.Join(stage, "cache-verification-"+profile)
+		statsPath := filepath.Join(stage, "lua-cache-stats-"+profile+".json")
+		verifyEnv := setEnv(env, "WIPPY_LUA_LINT_CACHE_STATS_FILE", statsPath)
+		args := []string{"--state", state, "wippy", "lint", "--set", "lua.cache.dir=" + filepath.Join(state, "cache", "lua")}
+		if profile != "default" {
+			args = append(args, "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict="+strconv.FormatBool(profile == "strict"))
+		}
+		if err := run(stage, verifyEnv, binary, args...); err != nil {
+			return fmt.Errorf("verify %s embedded Lua cache seed: %w", profile, err)
+		}
+		if err := verifyLuaCacheStats(statsPath); err != nil {
+			return fmt.Errorf("verify %s embedded Lua cache hits: %w", profile, err)
+		}
+	}
+	return nil
+}
+
+func verifyLuaCacheStats(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var stats struct {
+		CompileHits     uint64 `json:"compile_hits"`
+		CompileMisses   uint64 `json:"compile_misses"`
+		TypecheckHits   uint64 `json:"typecheck_hits"`
+		TypecheckMisses uint64 `json:"typecheck_misses"`
+	}
+	if err := json.Unmarshal(data, &stats); err != nil {
+		return err
+	}
+	if stats.CompileHits == 0 {
+		return fmt.Errorf("no compiled Lua cache entries were read")
+	}
+	if stats.CompileMisses != 0 || stats.TypecheckMisses != 0 {
+		return fmt.Errorf("compile misses %d, typecheck misses %d", stats.CompileMisses, stats.TypecheckMisses)
+	}
+	return nil
+}
 
 func writeLuaCacheSeed(cacheRoot, output string) (string, int, error) {
 	entriesRoot := filepath.Join(cacheRoot, "v1", "entries")

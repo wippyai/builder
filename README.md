@@ -35,6 +35,9 @@ make build MANIFEST=examples/hello/wippy.build.json OUTPUT=dist/hello
 The executable contains the runtime, application packs and a verified Lua
 compile/typecheck cache. First boot seeds the deployment and cache into its
 state; Hub updates are linted and add their cache entries to the same store.
+The build verifies cache hits in fresh state for default, strict and non-strict
+checker settings. Other settings or changed dependencies can miss the cache
+and are compiled normally; cache retention failure does not reject a valid update.
 [The hello example](examples/hello) and [Bee](https://github.com/wippyai/bee) use
 the same assembly path.
 

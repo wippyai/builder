@@ -36,6 +36,12 @@ embed the verified cache archive, then build again. The shipped executable
 imports that cache into its state only after checking its digest, cache schema
 and Lua toolchain identity.
 
+Each default/strict/non-strict cache verification uses independent fresh state
+and requires observed compilation hits with no misses. The runtime retains
+the normal fingerprint checks and cold-compilation fallback; update cache
+retention is optional. Source-archive extraction uses Go's `os.Root` so an
+escaping parent symlink cannot redirect writes outside the staging directory.
+
 Go's selected package owner and module version must match each native pin.
 The build emits an executable, provenance, effective Go module files, available
 dependency notices. Packaging verifies a snapshot of

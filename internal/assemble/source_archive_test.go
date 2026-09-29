@@ -69,6 +69,21 @@ func TestExtractRuntimeArchiveRejectsTraversal(t *testing.T) {
 	}
 }
 
+func TestExtractRuntimeArchiveRejectsSymlinkParentEscape(t *testing.T) {
+	destination := t.TempDir()
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(destination, "linked")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	archive := makeSourceArchive(t, "linked/escape", []byte("outside"))
+	if err := extractRuntimeArchive(archive, destination); err == nil {
+		t.Fatal("source archive followed an escaping parent symlink")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "escape")); !os.IsNotExist(err) {
+		t.Fatalf("archive wrote outside its destination: %v", err)
+	}
+}
+
 func makeSourceArchive(t *testing.T, name string, data []byte) []byte {
 	t.Helper()
 	var archive bytes.Buffer

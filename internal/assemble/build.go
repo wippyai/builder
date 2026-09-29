@@ -2,7 +2,6 @@
 package assemble
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -81,23 +80,8 @@ func Build(manifestPath, output string, toolchain bool) error {
 			if err = run(source, env, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-tags", strings.Join(manifest.Runtime.Tags, ","), "-o", binary, "./cmd/assembled"); err != nil {
 				return err
 			}
-			verifyState := filepath.Join(stage, "cache-verification-state")
-			statsPath := filepath.Join(stage, "lua-cache-stats.json")
-			verifyEnv := setEnv(env, "WIPPY_LUA_LINT_CACHE_STATS_FILE", statsPath)
-			verifyArgs := []string{"--state", verifyState, "wippy", "lint", "--set", "lua.cache.dir=" + filepath.Join(verifyState, "cache", "lua")}
-			if err = run(stage, verifyEnv, binary, verifyArgs...); err != nil {
-				return fmt.Errorf("verify embedded Lua cache seed: %w", err)
-			}
-			if err = verifyLuaCacheStats(statsPath); err != nil {
-				return fmt.Errorf("verify embedded Lua cache hits: %w", err)
-			}
-			verifyArgs = []string{"--state", verifyState, "wippy", "lint", "--set", "lua.cache.dir=" + filepath.Join(verifyState, "cache", "lua"),
-				"--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=false"}
-			if err = run(stage, verifyEnv, binary, verifyArgs...); err != nil {
-				return fmt.Errorf("verify non-strict embedded Lua cache seed: %w", err)
-			}
-			if err = verifyLuaCacheStats(statsPath); err != nil {
-				return fmt.Errorf("verify non-strict embedded Lua cache hits: %w", err)
+			if err = verifyLuaCacheSeed(stage, binary, env); err != nil {
+				return err
 			}
 		}
 	}
@@ -110,26 +94,6 @@ func strictLintArgs(luaCache string) []string {
 		args = append(args, "--set", "lua.cache.dir="+luaCache)
 	}
 	return append(args, "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true")
-}
-
-func verifyLuaCacheStats(path string) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	var stats struct {
-		CompileHits     uint64 `json:"compile_hits"`
-		CompileMisses   uint64 `json:"compile_misses"`
-		TypecheckHits   uint64 `json:"typecheck_hits"`
-		TypecheckMisses uint64 `json:"typecheck_misses"`
-	}
-	if err := json.Unmarshal(data, &stats); err != nil {
-		return err
-	}
-	if stats.CompileMisses != 0 || stats.TypecheckMisses != 0 {
-		return fmt.Errorf("compile misses %d, typecheck misses %d", stats.CompileMisses, stats.TypecheckMisses)
-	}
-	return nil
 }
 
 func freezeInputs(manifestPath string, m *Manifest, outputs artifactSet, stage string, toolchain bool) (map[string]string, error) {

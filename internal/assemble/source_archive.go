@@ -21,6 +21,11 @@ func extractRuntimeArchive(archive []byte, destination string) error {
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return err
 	}
+	files, err := os.OpenRoot(root)
+	if err != nil {
+		return err
+	}
+	defer files.Close()
 	reader := tar.NewReader(bytes.NewReader(archive))
 	for {
 		header, err := reader.Next()
@@ -37,28 +42,24 @@ func extractRuntimeArchive(archive []byte, destination string) error {
 		if name == "." || name == ".." || strings.HasPrefix(name, "../") || path.IsAbs(name) || strings.ContainsRune(name, 0) {
 			return fmt.Errorf("invalid runtime source path %q", header.Name)
 		}
-		target := filepath.Join(root, filepath.FromSlash(name))
-		relative, err := filepath.Rel(root, target)
-		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-			return fmt.Errorf("runtime source path escapes destination: %q", header.Name)
-		}
+		target := filepath.FromSlash(name)
 		mode := os.FileMode(header.Mode) & 0o777
 		switch header.Typeflag {
 		case tar.TypeDir:
 			if header.Size != 0 {
 				return fmt.Errorf("invalid runtime source directory %q", header.Name)
 			}
-			if err := os.MkdirAll(target, mode.Perm()); err != nil {
+			if err := files.MkdirAll(target, mode.Perm()); err != nil {
 				return err
 			}
 		case tar.TypeReg, tar.TypeRegA:
 			if header.Size < 0 {
 				return fmt.Errorf("invalid runtime source size for %q", header.Name)
 			}
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			if err := files.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return err
 			}
-			file, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode.Perm())
+			file, err := files.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode.Perm())
 			if err != nil {
 				return err
 			}
@@ -76,10 +77,10 @@ func extractRuntimeArchive(archive []byte, destination string) error {
 			if path.IsAbs(header.Linkname) || link == ".." || strings.HasPrefix(link, "../") || linkTarget == ".." || strings.HasPrefix(linkTarget, "../") {
 				return fmt.Errorf("runtime source symlink escapes destination: %q", header.Name)
 			}
-			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			if err := files.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return err
 			}
-			if err := os.Symlink(filepath.FromSlash(header.Linkname), target); err != nil {
+			if err := files.Symlink(filepath.FromSlash(header.Linkname), target); err != nil {
 				return err
 			}
 		default:
