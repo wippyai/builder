@@ -32,8 +32,9 @@ make build MANIFEST=examples/hello/wippy.build.json OUTPUT=dist/hello
 # Hello, Ada!
 ```
 
-The executable contains the runtime and application packs. First boot seeds a
-local deployment; later launches preserve installed application updates.
+The executable contains the runtime, application packs and a verified Lua
+compile/typecheck cache. First boot seeds the deployment and cache into its
+state; Hub updates are linted and add their cache entries to the same store.
 [The hello example](examples/hello) and [Bee](https://github.com/wippyai/bee) use
 the same assembly path.
 
