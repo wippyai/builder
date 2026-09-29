@@ -19,6 +19,7 @@ func TestVerifyLuaCacheStatsRequiresObservedHits(t *testing.T) {
 		{name: "compile misses", data: `{"compile_hits":1,"compile_misses":1}`, wantError: true},
 		{name: "typecheck misses", data: `{"compile_hits":1,"typecheck_misses":1}`, wantError: true},
 		{name: "compile-only hits", data: `{"compile_hits":1}`},
+		{name: "typecheck-only hits", data: `{"typecheck_hits":1}`},
 		{name: "compile and typecheck hits", data: `{"compile_hits":1,"typecheck_hits":1}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

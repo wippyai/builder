@@ -37,7 +37,7 @@ imports that cache into its state only after checking its digest, cache schema
 and Lua toolchain identity.
 
 Each default/strict/non-strict cache verification uses independent fresh state
-and requires observed compilation hits with no misses. The runtime retains
+and requires observed cache hits with no misses. The runtime retains
 the normal fingerprint checks and cold-compilation fallback; update cache
 retention is optional. Source-archive extraction uses Go's `os.Root` so an
 escaping parent symlink cannot redirect writes outside the staging directory.

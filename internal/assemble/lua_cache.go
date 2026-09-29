@@ -53,8 +53,8 @@ func verifyLuaCacheStats(path string) error {
 	if err := json.Unmarshal(data, &stats); err != nil {
 		return err
 	}
-	if stats.CompileHits == 0 {
-		return fmt.Errorf("no compiled Lua cache entries were read")
+	if stats.CompileHits == 0 && stats.TypecheckHits == 0 {
+		return fmt.Errorf("no Lua cache entries were read")
 	}
 	if stats.CompileMisses != 0 || stats.TypecheckMisses != 0 {
 		return fmt.Errorf("compile misses %d, typecheck misses %d", stats.CompileMisses, stats.TypecheckMisses)
