@@ -33,7 +33,7 @@ type Runtime struct {
 type Application struct {
 	Module  string            `json:"module"`
 	Command string            `json:"command"`
-	DataEnv map[string]string `json:"data_env,omitempty"`
+	Data    map[string]string `json:"data,omitempty"`
 	Packs   []Pack            `json:"packs"`
 }
 type Native struct {
@@ -42,6 +42,7 @@ type Native struct {
 	Package string `json:"package"`
 	Factory string `json:"factory"`
 	Private bool   `json:"private,omitempty"`
+	Host    bool   `json:"host,omitempty"`
 }
 type Manifest struct {
 	Schema      int         `json:"schema"`
@@ -135,17 +136,33 @@ func (m *Manifest) Validate() error {
 	if !modules[app.Module] {
 		return fmt.Errorf("root application pack is missing")
 	}
-	for name, path := range app.DataEnv {
+	for name, path := range app.Data {
 		if !matches(`[A-Z][A-Z0-9_]*`, name) || !local(path) {
 			return fmt.Errorf("invalid data environment binding %q", name)
 		}
 	}
-	modules = map[string]bool{}
+	moduleVersions := map[string]string{}
+	components := map[string]bool{}
+	hosts := 0
 	for _, n := range m.Native {
-		if !validImportPath(n.Module) || modules[n.Module] || !matches(`v`+versionPattern, n.Version) || !matches(`[A-Z][A-Za-z0-9_]*`, n.Factory) || !validImportPath(n.Package) || (n.Package != n.Module && !strings.HasPrefix(n.Package, n.Module+"/")) {
-			return fmt.Errorf("invalid or duplicate native component %q", n.Module)
+		if !validImportPath(n.Module) || !matches(`v`+versionPattern, n.Version) || !matches(`[A-Z][A-Za-z0-9_]*`, n.Factory) || !validImportPath(n.Package) || (n.Package != n.Module && !strings.HasPrefix(n.Package, n.Module+"/")) {
+			return fmt.Errorf("invalid native component %q", n.Module)
 		}
-		modules[n.Module] = true
+		if version, ok := moduleVersions[n.Module]; ok && version != n.Version {
+			return fmt.Errorf("native module %q has conflicting versions", n.Module)
+		}
+		component := n.Package + "\x00" + n.Factory
+		if components[component] {
+			return fmt.Errorf("duplicate native component %q", n.Package)
+		}
+		moduleVersions[n.Module] = n.Version
+		components[component] = true
+		if n.Host {
+			hosts++
+		}
+	}
+	if hosts > 1 {
+		return fmt.Errorf("application has more than one native host")
 	}
 	return nil
 }

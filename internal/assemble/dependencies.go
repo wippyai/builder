@@ -17,7 +17,7 @@ type goPackage struct {
 }
 
 func prepareDependencies(source string, env []string, m *Manifest) error {
-	for _, component := range m.Native {
+	for _, component := range uniqueNativeModules(m.Native) {
 		if err := run(source, env, "go", "mod", "edit", "-require="+component.Module+"@"+component.Version); err != nil {
 			return err
 		}
@@ -41,6 +41,20 @@ func prepareDependencies(source string, env []string, m *Manifest) error {
 		}
 	}
 	return run(source, env, "go", "mod", "verify")
+}
+
+// uniqueNativeModules keeps one requirement per module. Manifest validation
+// ensures all factories from a module select the same version.
+func uniqueNativeModules(components []Native) []Native {
+	seen := make(map[string]bool, len(components))
+	var unique []Native
+	for _, component := range components {
+		if !seen[component.Module] {
+			seen[component.Module] = true
+			unique = append(unique, component)
+		}
+	}
+	return unique
 }
 
 // verifyNativePackage checks the package's resolved module owner and version,
