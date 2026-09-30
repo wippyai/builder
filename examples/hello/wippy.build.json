@@ -3,7 +3,7 @@
   "name": "hello",
   "runtime": {
     "repository": "https://github.com/wippyai/runtime.git",
-    "commit": "fd1741b1d86a26ef1d6a65a50b92526a8554c009",
+    "commit": "8ec6f2bda3a3fffb53fc70ccc94f3df45c4920aa",
     "go": "1.27.0",
     "tags": [
       "fts5",
@@ -20,7 +20,7 @@
         "module": "example/hello",
         "version": "1.0.0",
         "path": "hello.wapp",
-        "sha256": "5056de57e03baf113e49678c4aab4e0b98680d07d096b07ad162c16385bd8d17"
+        "sha256": "f6c72e225e7d3ed3d49b98245e31ccf78481ba6e3e0c0c6285b3416c286b8d65"
       }
     ]
   }

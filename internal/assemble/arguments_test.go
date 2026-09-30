@@ -3,6 +3,7 @@ package assemble
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -53,18 +54,45 @@ func TestArguments(t *testing.T) {
 			}
 		})
 	}
-	for name, route := range map[string][]string{"explicit run": {"run"}, "implicit run": {}} {
+	for name, strict := range map[string]bool{"strict typecheck": true, "non-strict typecheck": false} {
 		t.Run(name, func(t *testing.T) {
-			state := filepath.Join(t.TempDir(), "state")
+			directory := t.TempDir()
+			state := filepath.Join(directory, "state")
+			statsPath := filepath.Join(directory, "lua-cache-stats.json")
+			must(t, os.MkdirAll(state, 0700))
+			config := "version: \"1.0\"\nlua:\n  type_system:\n    enabled: true\n    strict: " + strconv.FormatBool(strict) + "\n"
+			must(t, os.WriteFile(filepath.Join(state, ".wippy.yaml"), []byte(config), 0600))
 			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 			defer cancel()
-			args := append([]string{"--state", state}, route...)
-			args = append(args, "--state")
+			args := []string{"--state", state, "--state"}
 			command := exec.CommandContext(ctx, binary, args...)
-			command.Dir = t.TempDir()
+			command.Dir = directory
+			command.Env = []string{
+				"PATH=/nonexistent",
+				"HOME=" + directory,
+				"XDG_CONFIG_HOME=" + filepath.Join(directory, "config"),
+				"TMPDIR=" + os.Getenv("TMPDIR"),
+				"WIPPY_LUA_CACHE_STATS_FILE=" + statsPath,
+			}
 			output, err := command.CombinedOutput()
 			if err != nil || !strings.Contains(string(output), "Hello, --state!\n") {
 				t.Fatalf("application arguments changed: %v\n%s", err, output)
+			}
+			statsData, err := os.ReadFile(statsPath)
+			if err != nil {
+				t.Fatalf("read runtime cache stats: %v\n%s", err, output)
+			}
+			var stats struct {
+				CompileHits     uint64 `json:"compile_hits"`
+				CompileMisses   uint64 `json:"compile_misses"`
+				TypecheckHits   uint64 `json:"typecheck_hits"`
+				TypecheckMisses uint64 `json:"typecheck_misses"`
+			}
+			if err := json.Unmarshal(statsData, &stats); err != nil {
+				t.Fatalf("decode runtime cache stats: %v", err)
+			}
+			if stats.CompileHits == 0 || stats.CompileMisses != 0 || stats.TypecheckHits == 0 || stats.TypecheckMisses != 0 {
+				t.Fatalf("application boot did not consume its embedded Lua cache: %+v", stats)
 			}
 		})
 	}

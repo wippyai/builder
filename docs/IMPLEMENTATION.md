@@ -25,11 +25,22 @@ revision requirements.
 A manifest selects an exact runtime commit, Go toolchain, build tags,
 versioned application packs and native component factories.
 The assembler copies pack inputs into staging and verifies their
-hashes before invoking build tools. Git operates on a temporary checkout. Go
-workspaces and ambient build flags are disabled.
+hashes before invoking build tools. Git fetches the pinned runtime into a
+temporary object clone, then exports that commit into the build source tree.
+Go workspaces and ambient build flags are disabled.
 
 Runtime changes belong upstream. Manifest decoding rejects `runtime.patches`;
 the assembler compiles the selected runtime with a generated command entrypoint.
+Application builds run strict lint, warm the cache in the validation state,
+embed the verified cache archive, then build again. The shipped executable
+imports that cache into its state only after checking its digest, cache schema
+and Lua toolchain identity.
+
+Each default/strict/non-strict cache verification uses independent fresh state
+and requires observed cache hits with no misses. The runtime retains
+the normal fingerprint checks and cold-compilation fallback; update cache
+retention is optional. Source-archive extraction uses Go's `os.Root` so an
+escaping parent symlink cannot redirect writes outside the staging directory.
 
 Go's selected package owner and module version must match each native pin.
 The build emits an executable, provenance, effective Go module files, available

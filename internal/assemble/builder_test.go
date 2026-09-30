@@ -72,7 +72,63 @@ func TestGeneratedSource(t *testing.T) {
 			t.Fatalf("generated application uses the wrong runtime API:\n%s", source)
 		}
 	}
+	seedSource, err := GenerateWithLuaCacheSeed(&m, "sha256:"+strings.Repeat("a", 64))
+	must(t, err)
+	_, err = parser.ParseFile(token.NewFileSet(), "main.go", seedSource, parser.AllErrors)
+	must(t, err)
+	if !bytes.Contains(seedSource, []byte("lua-cache.seed")) || !bytes.Contains(seedSource, []byte("LuaCacheSeed:")) {
+		t.Fatalf("generated application does not embed its Lua cache seed:\n%s", seedSource)
+	}
 }
+
+func TestLuaCacheSeedArchiveIsContentAddressedAndDeterministic(t *testing.T) {
+	root := t.TempDir()
+	cacheRoot := filepath.Join(root, "cache")
+	key := strings.Repeat("a", 64)
+	entry := filepath.Join(cacheRoot, "v1", "entries", key)
+	must(t, os.MkdirAll(entry, 0700))
+	must(t, os.WriteFile(filepath.Join(entry, "meta.json"), []byte(`{"compile_fingerprint":"fp"}`), 0600))
+	must(t, os.WriteFile(filepath.Join(entry, "proto.luac"), []byte("proto"), 0600))
+
+	firstPath := filepath.Join(root, "first.seed")
+	firstDigest, firstEntries, err := writeLuaCacheSeed(cacheRoot, firstPath)
+	must(t, err)
+	if firstEntries != 1 {
+		t.Fatalf("seed contains %d entries, want one", firstEntries)
+	}
+	must(t, os.Chtimes(filepath.Join(entry, "meta.json"), time.Now(), time.Now()))
+	secondPath := filepath.Join(root, "second.seed")
+	secondDigest, secondEntries, err := writeLuaCacheSeed(cacheRoot, secondPath)
+	must(t, err)
+	if firstDigest != secondDigest || firstEntries != secondEntries {
+		t.Fatalf("cache seed changed with file timestamps: %s/%d vs %s/%d", firstDigest, firstEntries, secondDigest, secondEntries)
+	}
+	first, err := os.ReadFile(firstPath)
+	must(t, err)
+	second, err := os.ReadFile(secondPath)
+	must(t, err)
+	if !bytes.Equal(first, second) {
+		t.Fatal("cache seed archive is not deterministic")
+	}
+	compressed, err := gzip.NewReader(bytes.NewReader(first))
+	must(t, err)
+	defer compressed.Close()
+	archive := tar.NewReader(compressed)
+	var names []string
+	for {
+		header, err := archive.Next()
+		if err == io.EOF {
+			break
+		}
+		must(t, err)
+		names = append(names, header.Name)
+	}
+	want := []string{"v1/entries/" + key + "/meta.json", "v1/entries/" + key + "/proto.luac"}
+	if !slices.Equal(names, want) {
+		t.Fatalf("unexpected cache seed files: %v", names)
+	}
+}
+
 func TestChecksumBeforeTools(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "manifest.json")
