@@ -83,6 +83,15 @@ selected runtime commit. Go's resolved package owner and version must match each
 native pin. Native modules use Wippy boot registration, typed Lua exports, and
 process permissions.
 
+`application.data` maps environment names to state-relative paths, such as
+`{"APP_DB": "db/application.sqlite"}`. Runtime preserves user-provided values.
+This is the sole data-path field; older `data_env` manifests must rename it to
+`data`. Multiple native factories may share one module at the same version.
+One native entry can set `host: true`; its factory result implements both
+`boot.Component` and `app.Host` and is reused for both executable fields.
+Host selection preserves the embedded warmed Lua cache seed. See the
+[SDK example](docs/SDK.md#compile-a-native-module) for the factory contract.
+
 To move an application to another runtime release, change the manifest's
 `runtime.commit` to that tag's full commit SHA, rebuild the toolchain, repack the
 application, then rebuild and test the executable. A new runtime or native Go

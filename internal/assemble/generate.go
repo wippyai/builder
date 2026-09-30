@@ -33,10 +33,19 @@ func generate(m *Manifest, toolchain bool, cacheDigest string) ([]byte, error) {
 			s.WriteString("\"fmt\"\n\"os\"\n")
 		}
 	}
-	var factories []string
+	var components []string
+	imports := map[string]string{}
+	host := "nil"
 	for i, n := range m.Native {
-		fmt.Fprintf(&s, "native%d %q\n", i, n.Package)
-		factories = append(factories, fmt.Sprintf("native%d.%s()", i, n.Factory))
+		if _, exists := imports[n.Package]; !exists {
+			imports[n.Package] = fmt.Sprintf("native%d", i)
+			fmt.Fprintf(&s, "%s %q\n", imports[n.Package], n.Package)
+		}
+		component := fmt.Sprintf("component%d", i)
+		components = append(components, component)
+		if n.Host {
+			host = component
+		}
 	}
 	s.WriteString(")\n")
 	if !toolchain {
@@ -48,6 +57,9 @@ func generate(m *Manifest, toolchain bool, cacheDigest string) ([]byte, error) {
 		}
 	}
 	s.WriteString("func main() {\n")
+	for i, n := range m.Native {
+		fmt.Fprintf(&s, "component%d := %s.%s()\n", i, imports[n.Package], n.Factory)
+	}
 	if toolchain {
 		s.WriteString(`directory, err := os.Getwd()
  if err != nil { fmt.Fprintln(os.Stderr, err); os.Exit(1) }
@@ -58,21 +70,21 @@ func generate(m *Manifest, toolchain bool, cacheDigest string) ([]byte, error) {
  err = cmd.ExecuteWithOptions(context.Background(), cmd.ExecuteOptions{
  Args: os.Args[1:], LockFile: filepath.Join(directory, "wippy.lock"), ConfigFiles: config,
  `)
-		fmt.Fprintf(&s, "Components: []boot.Component{%s},\n})\n", strings.Join(factories, ","))
+		fmt.Fprintf(&s, "Components: []boot.Component{%s},\n})\n", strings.Join(components, ","))
 		s.WriteString("if err != nil { fmt.Fprintln(os.Stderr, err); os.Exit(1) }\n")
 	} else {
 		if cacheDigest != "" {
 			s.WriteString("schema, toolchainID, identityErr := app.LuaCacheIdentity()\nif identityErr != nil { fmt.Fprintln(os.Stderr, identityErr); os.Exit(1) }\n")
 		}
 		app := m.Application
-		fmt.Fprintf(&s, "app.Main(app.Executable{Name: %q, Command: %q,\nComponents: []boot.Component{%s},\nData: map[string]string{", m.Name, app.Command, strings.Join(factories, ","))
-		keys := make([]string, 0, len(app.DataEnv))
-		for k := range app.DataEnv {
+		fmt.Fprintf(&s, "app.Main(app.Executable{Name: %q, Command: %q, Host: %s,\nComponents: []boot.Component{%s},\nData: map[string]string{", m.Name, app.Command, host, strings.Join(components, ","))
+		keys := make([]string, 0, len(app.Data))
+		for k := range app.Data {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			fmt.Fprintf(&s, "%s:%s,", strconv.Quote(k), strconv.Quote(app.DataEnv[k]))
+			fmt.Fprintf(&s, "%s:%s,", strconv.Quote(k), strconv.Quote(app.Data[k]))
 		}
 		fmt.Fprintf(&s, "},\nBundle: app.Bundle{Root: %q, Packs: []app.Pack{", app.Module)
 		for i, p := range app.Packs {

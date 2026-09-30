@@ -29,7 +29,7 @@ func must(t *testing.T, err error) {
 	}
 }
 func TestManifest(t *testing.T) {
-	changes := []func(*Manifest){func(m *Manifest) { m.Runtime.Commit = "main" }, func(m *Manifest) { m.Runtime.Go = "latest" }, func(m *Manifest) { m.Application.Module = "example/missing" }, func(m *Manifest) { m.Application.Packs = append(m.Application.Packs, m.Application.Packs[0]) }, func(m *Manifest) { m.Application.Packs[0].Version = "latest" }, func(m *Manifest) { m.Application.Packs[0].Path = "../escape" }, func(m *Manifest) { m.Application.DataEnv = map[string]string{"DB": "../escape"} }, func(m *Manifest) {
+	changes := []func(*Manifest){func(m *Manifest) { m.Runtime.Commit = "main" }, func(m *Manifest) { m.Runtime.Go = "latest" }, func(m *Manifest) { m.Application.Module = "example/missing" }, func(m *Manifest) { m.Application.Packs = append(m.Application.Packs, m.Application.Packs[0]) }, func(m *Manifest) { m.Application.Packs[0].Version = "latest" }, func(m *Manifest) { m.Application.Packs[0].Path = "../escape" }, func(m *Manifest) { m.Application.Data = map[string]string{"DB": "../escape"} }, func(m *Manifest) {
 		m.Native = []Native{{Module: "example.com/native", Version: "v1.0.0", Package: "example.com/native/watch", Factory: `Component();panic("x")`}}
 	}}
 	m := fixture()

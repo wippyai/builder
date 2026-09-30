@@ -15,6 +15,9 @@
   "application": {
     "module": "example/hello",
     "command": "hello",
+    "data": {
+      "HELLO_DATA": "data"
+    },
     "packs": [
       {
         "module": "example/hello",
