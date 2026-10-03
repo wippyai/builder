@@ -209,8 +209,9 @@ func Seal(path, version string) error {
 	return WriteJSON(path, m)
 }
 
-// PackRoot creates a source snapshot with a published identity. Multi-module
-// applications supply independently prepared packs to Build.
+// PackRoot creates the root application pack with its published identity and
+// records the vendored pack of every module wippy.lock selects, so Build
+// embeds the whole locked application as its baseline.
 func PackRoot(path, toolchain, version string) error {
 	path, err := filepath.Abs(path)
 	if err != nil {
@@ -220,10 +221,20 @@ func PackRoot(path, toolchain, version string) error {
 	if err != nil {
 		return err
 	}
-	if len(m.Application.Packs) != 1 {
-		return fmt.Errorf("pack requires one source root; prepare dependency packs independently")
+	var p Pack
+	found := false
+	for _, pack := range m.Application.Packs {
+		if pack.Module == m.Application.Module {
+			p, found = pack, true
+		}
 	}
-	p := m.Application.Packs[0]
+	if !found {
+		return fmt.Errorf("pack requires the root application pack in the manifest")
+	}
+	dependencies, err := lockedPacks(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
 	p.Version = strings.TrimPrefix(p.Version, "v")
 	if version != "" {
 		p.Version = strings.TrimPrefix(version, "v")
@@ -253,6 +264,10 @@ func PackRoot(path, toolchain, version string) error {
 		return err
 	}
 	if err = run(filepath.Dir(path), nil, toolchain, "pack", output, "--meta", "namespace="+strings.Join(parts, "."), "--meta", "name="+parts[1], "--meta", "version="+p.Version, "--silent"); err != nil {
+		return err
+	}
+	m.Application.Packs = append([]Pack{p}, dependencies...)
+	if err = WriteJSON(path, m); err != nil {
 		return err
 	}
 	return Seal(path, p.Version)
