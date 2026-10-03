@@ -22,10 +22,19 @@ func prepareDependencies(source string, env []string, m *Manifest) error {
 			return err
 		}
 	}
-	if len(m.Native) > 0 {
-		if err := run(source, env, "go", "mod", "tidy"); err != nil {
-			return err
-		}
+	if err := run(source, env, "go", "mod", "tidy"); err != nil {
+		return err
+	}
+	data, err := capture(source, env, "go", "list", "-mod=readonly", "-m", "-json", m.Runtime.Module)
+	if err != nil {
+		return err
+	}
+	var runtime goModule
+	if err = json.Unmarshal(data, &runtime); err != nil {
+		return err
+	}
+	if runtime.Path != m.Runtime.Module || runtime.Replace != nil {
+		return fmt.Errorf("runtime module %s is not resolved from the module cache", m.Runtime.Module)
 	}
 	for _, component := range m.Native {
 		data, err := capture(source, env, "go", "list", "-mod=readonly", "-tags", strings.Join(m.Runtime.Tags, ","), "-json", "--", component.Package)

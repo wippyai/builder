@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// Build compiles a pinned runtime and native component selection. Application
+// Build compiles a pinned runtime module and native component selection. Application
 // builds embed the verified packs; toolchain builds expose the normal Wippy CLI.
 func Build(manifestPath, output string, toolchain bool) error {
 	manifestPath, err := filepath.Abs(manifestPath)
@@ -37,7 +37,7 @@ func Build(manifestPath, output string, toolchain bool) error {
 	if err != nil {
 		return err
 	}
-	source, err := prepareSource(stage, manifest, inputs, toolchain, env)
+	source, err := prepareModule(stage, manifest, inputs, toolchain, env)
 	if err != nil {
 		return err
 	}
@@ -45,7 +45,7 @@ func Build(manifestPath, output string, toolchain bool) error {
 		return err
 	}
 	binary := filepath.Join(stage, manifest.Name)
-	if err = run(source, env, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-tags", strings.Join(manifest.Runtime.Tags, ","), "-o", binary, "./cmd/assembled"); err != nil {
+	if err = run(source, env, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-tags", strings.Join(manifest.Runtime.Tags, ","), "-o", binary, "."); err != nil {
 		return err
 	}
 	if !toolchain {
@@ -64,7 +64,7 @@ func Build(manifestPath, output string, toolchain bool) error {
 		if err = run(stage, env, binary, args...); err != nil {
 			return fmt.Errorf("warm non-strict embedded application cache: %w", err)
 		}
-		seedPath := filepath.Join(source, "cmd", "assembled", "lua-cache.seed")
+		seedPath := filepath.Join(source, "lua-cache.seed")
 		seedDigest, _, err := writeLuaCacheSeed(luaCache, seedPath)
 		if err != nil {
 			return fmt.Errorf("create embedded Lua cache seed: %w", err)
@@ -74,10 +74,10 @@ func Build(manifestPath, output string, toolchain bool) error {
 			if err != nil {
 				return err
 			}
-			if err = atomicWrite(filepath.Join(source, "cmd", "assembled", "main.go"), generated, 0644); err != nil {
+			if err = atomicWrite(filepath.Join(source, "main.go"), generated, 0644); err != nil {
 				return err
 			}
-			if err = run(source, env, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-tags", strings.Join(manifest.Runtime.Tags, ","), "-o", binary, "./cmd/assembled"); err != nil {
+			if err = run(source, env, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-tags", strings.Join(manifest.Runtime.Tags, ","), "-o", binary, "."); err != nil {
 				return err
 			}
 			if err = verifyLuaCacheSeed(stage, binary, env); err != nil {
@@ -131,27 +131,21 @@ func freezeInputs(manifestPath string, m *Manifest, outputs artifactSet, stage s
 	return verified, nil
 }
 
-func prepareSource(stage string, m *Manifest, inputs map[string]string, toolchain bool, env []string) (string, error) {
-	repositorySource := filepath.Join(stage, "runtime.git")
-	source := filepath.Join(stage, "runtime")
-	repository := m.Runtime.Repository
-	if override := os.Getenv("WIPPY_BUILD_RUNTIME_REPOSITORY"); override != "" {
-		repository = override
-	}
-	if err := run("", env, "git", "clone", "--no-checkout", "--filter=blob:none", repository, repositorySource); err != nil {
+// prepareModule writes the executable's own Go module: a generated main
+// package and its embedded packs, requiring the runtime and native components
+// as ordinary module dependencies resolved through the Go module cache.
+func prepareModule(stage string, m *Manifest, inputs map[string]string, toolchain bool, env []string) (string, error) {
+	source := filepath.Join(stage, "module")
+	if err := os.MkdirAll(source, 0o755); err != nil {
 		return "", err
 	}
-	archive, err := capture(repositorySource, env, "git", "archive", m.Runtime.Commit)
-	if err != nil {
+	goMod := fmt.Sprintf("module wippy.build/%s\n\ngo %s\n", m.Name, m.Runtime.Go)
+	if err := atomicWrite(filepath.Join(source, "go.mod"), []byte(goMod), 0644); err != nil {
 		return "", err
 	}
-	if err := extractRuntimeArchive(archive, source); err != nil {
-		return "", err
-	}
-	entry := filepath.Join(source, "cmd", "assembled")
 	if !toolchain {
 		for i, pack := range m.Application.Packs {
-			if err := copyFile(inputs[pack.Path], filepath.Join(entry, "packs", fmt.Sprintf("%d.wapp", i)), 0644); err != nil {
+			if err := copyFile(inputs[pack.Path], filepath.Join(source, "packs", fmt.Sprintf("%d.wapp", i)), 0644); err != nil {
 				return "", err
 			}
 		}
@@ -160,7 +154,10 @@ func prepareSource(stage string, m *Manifest, inputs map[string]string, toolchai
 	if err != nil {
 		return "", err
 	}
-	if err = atomicWrite(filepath.Join(entry, "main.go"), generated, 0644); err != nil {
+	if err = atomicWrite(filepath.Join(source, "main.go"), generated, 0644); err != nil {
+		return "", err
+	}
+	if err = run(source, env, "go", "get", m.Runtime.Module+"@"+m.Runtime.Version); err != nil {
 		return "", err
 	}
 	return source, nil

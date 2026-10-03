@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -20,7 +21,7 @@ import (
 )
 
 func fixture() Manifest {
-	return Manifest{Schema: 1, Name: "hello", Runtime: Runtime{Repository: "https://github.com/wippyai/runtime.git", Commit: strings.Repeat("a", 40), Go: "1.27.0", Tags: []string{}}, Application: Application{Module: "example/hello", Command: "hello", Packs: []Pack{{Module: "example/hello", Version: "1.0.0", Path: "hello.wapp", SHA256: strings.Repeat("a", 64)}}}}
+	return Manifest{Schema: 1, Name: "hello", Runtime: Runtime{Module: "github.com/wippyai/runtime", Version: strings.Repeat("a", 40), Go: "1.27.0", Tags: []string{}}, Application: Application{Module: "example/hello", Command: "hello", Packs: []Pack{{Module: "example/hello", Version: "1.0.0", Path: "hello.wapp", SHA256: strings.Repeat("a", 64)}}}}
 }
 func must(t *testing.T, err error) {
 	t.Helper()
@@ -29,10 +30,14 @@ func must(t *testing.T, err error) {
 	}
 }
 func TestManifest(t *testing.T) {
-	changes := []func(*Manifest){func(m *Manifest) { m.Runtime.Commit = "main" }, func(m *Manifest) { m.Runtime.Go = "latest" }, func(m *Manifest) { m.Application.Module = "example/missing" }, func(m *Manifest) { m.Application.Packs = append(m.Application.Packs, m.Application.Packs[0]) }, func(m *Manifest) { m.Application.Packs[0].Version = "latest" }, func(m *Manifest) { m.Application.Packs[0].Path = "../escape" }, func(m *Manifest) { m.Application.Data = map[string]string{"DB": "../escape"} }, func(m *Manifest) {
+	changes := []func(*Manifest){func(m *Manifest) { m.Runtime.Version = "main" }, func(m *Manifest) { m.Runtime.Module = "runtime" }, func(m *Manifest) { m.Application.State = "../escape" }, func(m *Manifest) { m.Application.Owned = &Owned{} }, func(m *Manifest) { m.Application.Owned = &Owned{Command: "client --flag"} }, func(m *Manifest) { m.Runtime.Go = "latest" }, func(m *Manifest) { m.Application.Module = "example/missing" }, func(m *Manifest) { m.Application.Packs = append(m.Application.Packs, m.Application.Packs[0]) }, func(m *Manifest) { m.Application.Packs[0].Version = "latest" }, func(m *Manifest) { m.Application.Packs[0].Path = "../escape" }, func(m *Manifest) { m.Application.Data = map[string]string{"DB": "../escape"} }, func(m *Manifest) {
 		m.Native = []Native{{Module: "example.com/native", Version: "v1.0.0", Package: "example.com/native/watch", Factory: `Component();panic("x")`}}
 	}}
 	m := fixture()
+	must(t, m.Validate())
+	m.Runtime.Version = "v0.1.0"
+	m.Application.State = ".app"
+	m.Application.Owned = &Owned{Command: "client"}
 	must(t, m.Validate())
 	for i, change := range changes {
 		m := fixture()
@@ -71,6 +76,13 @@ func TestGeneratedSource(t *testing.T) {
 		if !toolchain && (!bytes.Contains(source, []byte("app.Main(app.Executable")) || bytes.Contains(source, []byte("application.Run"))) {
 			t.Fatalf("generated application uses the wrong runtime API:\n%s", source)
 		}
+	}
+	m.Application.State = ".app"
+	m.Application.Owned = &Owned{Command: "attach"}
+	declared, err := Generate(&m, false)
+	must(t, err)
+	if !regexp.MustCompile(`State:\s+"\.app"`).Match(declared) || !regexp.MustCompile(`OwnedCommand:\s+"attach"`).Match(declared) {
+		t.Fatalf("generated application lost its state rules:\n%s", declared)
 	}
 	seedSource, err := GenerateWithLuaCacheSeed(&m, "sha256:"+strings.Repeat("a", 64))
 	must(t, err)
@@ -274,8 +286,8 @@ func TestHub(t *testing.T) {
 	must(t, err)
 	root := t.TempDir()
 	source := filepath.Join(root, "runtime")
-	must(t, run("", nil, "git", "clone", "--no-checkout", "--filter=blob:none", m.Runtime.Repository, source))
-	must(t, run(source, nil, "git", "checkout", "--detach", m.Runtime.Commit))
+	must(t, run("", nil, "git", "clone", "--no-checkout", "--filter=blob:none", "https://"+m.Runtime.Module+".git", source))
+	must(t, run(source, nil, "git", "checkout", "--detach", m.Runtime.Version))
 	env := os.Environ()
 	for k, v := range map[string]string{"GOWORK": "off", "GOTOOLCHAIN": "go" + m.Runtime.Go, "WIPPY_TEST_APPLICATION_BINARY": binary, "WIPPY_TEST_APPLICATION_PACK": filepath.Join(filepath.Dir(path), m.Application.Packs[0].Path)} {
 		env = setEnv(env, k, v)

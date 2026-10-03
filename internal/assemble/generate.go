@@ -77,7 +77,14 @@ func generate(m *Manifest, toolchain bool, cacheDigest string) ([]byte, error) {
 			s.WriteString("schema, toolchainID, identityErr := app.LuaCacheIdentity()\nif identityErr != nil { fmt.Fprintln(os.Stderr, identityErr); os.Exit(1) }\n")
 		}
 		app := m.Application
-		fmt.Fprintf(&s, "app.Main(app.Executable{Name: %q, Command: %q, Host: %s,\nComponents: []boot.Component{%s},\nData: map[string]string{", m.Name, app.Command, host, strings.Join(components, ","))
+		fmt.Fprintf(&s, "app.Main(app.Executable{Name: %q, Command: %q, Host: %s,\n", m.Name, app.Command, host)
+		if app.State != "" {
+			fmt.Fprintf(&s, "State: %q,\n", app.State)
+		}
+		if app.Owned != nil {
+			fmt.Fprintf(&s, "OwnedCommand: %q,\n", app.Owned.Command)
+		}
+		fmt.Fprintf(&s, "Components: []boot.Component{%s},\nData: map[string]string{", strings.Join(components, ","))
 		keys := make([]string, 0, len(app.Data))
 		for k := range app.Data {
 			keys = append(keys, k)

@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,15 +23,26 @@ type Pack struct {
 	Path    string `json:"path"`
 	SHA256  string `json:"sha256"`
 }
+
+// Runtime selects the Wippy runtime as an ordinary Go module dependency.
+// Version is an exact commit or a module version.
 type Runtime struct {
-	Repository string   `json:"repository"`
-	Commit     string   `json:"commit"`
-	Go         string   `json:"go"`
-	Tags       []string `json:"tags"`
+	Module  string   `json:"module"`
+	Version string   `json:"version"`
+	Go      string   `json:"go"`
+	Tags    []string `json:"tags"`
+}
+
+// Owned names the command an invocation runs, in a transient state, when the
+// application's state is already owned by a live invocation.
+type Owned struct {
+	Command string `json:"command"`
 }
 type Application struct {
 	Module  string            `json:"module"`
 	Command string            `json:"command"`
+	State   string            `json:"state,omitempty"`
+	Owned   *Owned            `json:"owned,omitempty"`
 	Data    map[string]string `json:"data,omitempty"`
 	Packs   []Pack            `json:"packs"`
 }
@@ -105,12 +115,11 @@ func (m *Manifest) Validate() error {
 		return fmt.Errorf("invalid schema or executable name")
 	}
 	r := m.Runtime
-	repository, err := url.Parse(r.Repository)
-	if err != nil || repository.Scheme != "https" || repository.Hostname() == "" || repository.User != nil || repository.RawQuery != "" || repository.Fragment != "" {
-		return fmt.Errorf("runtime repository must be an HTTPS Git URL without credentials, query or fragment")
+	if !validImportPath(r.Module) {
+		return fmt.Errorf("runtime module must be a Go module path")
 	}
-	if !matches(`[0-9a-f]{40}`, r.Commit) || !matches(numberPattern+`\.`+numberPattern+`\.`+numberPattern, r.Go) || r.Tags == nil {
-		return fmt.Errorf("runtime requires HTTPS source, exact commit, Go version and tags")
+	if !matches(`[0-9a-f]{40}`, r.Version) && !matches(`v`+versionPattern, r.Version) || !matches(numberPattern+`\.`+numberPattern+`\.`+numberPattern, r.Go) || r.Tags == nil {
+		return fmt.Errorf("runtime requires an exact commit or module version, Go version and tags")
 	}
 	for _, tag := range r.Tags {
 		if !matches(`[A-Za-z0-9_]+`, tag) {
@@ -121,6 +130,12 @@ func (m *Manifest) Validate() error {
 	app := m.Application
 	if !matches(modulePattern, app.Module) || app.Command == "" {
 		return fmt.Errorf("invalid application identity or command")
+	}
+	if app.State != "" && !local(app.State) {
+		return fmt.Errorf("application state must be a relative path inside the working directory")
+	}
+	if app.Owned != nil && (app.Owned.Command == "" || strings.ContainsAny(app.Owned.Command, " \t\n\x00")) {
+		return fmt.Errorf("application owned command must be a command name")
 	}
 	modules := map[string]bool{}
 	for _, p := range app.Packs {
