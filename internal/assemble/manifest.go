@@ -252,7 +252,6 @@ func PackRoot(path, toolchain, version string) error {
 	if err != nil {
 		return err
 	}
-	parts := strings.Split(p.Module, "/")
 	output := filepath.Join(filepath.Dir(path), p.Path)
 	if output == path {
 		return fmt.Errorf("pack output overlaps the build manifest")
@@ -263,7 +262,7 @@ func PackRoot(path, toolchain, version string) error {
 	if err = os.MkdirAll(filepath.Dir(output), 0755); err != nil {
 		return err
 	}
-	if err = run(filepath.Dir(path), nil, toolchain, "pack", output, "--meta", "namespace="+strings.Join(parts, "."), "--meta", "name="+parts[1], "--meta", "version="+p.Version, "--silent"); err != nil {
+	if err = run(filepath.Dir(path), nil, toolchain, "pack", "--module", p.Module, output, "--meta", "version="+p.Version, "--silent"); err != nil {
 		return err
 	}
 	m.Application.Packs = append([]Pack{p}, dependencies...)

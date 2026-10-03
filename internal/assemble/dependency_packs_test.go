@@ -29,7 +29,7 @@ func packFixture(t *testing.T, lockHash func(string) string) (string, string, st
 	lock := "directories:\n  modules: .wippy\n  src: ./src\nmodules:\n  - name: wippy/migration\n    version: 0.3.21\n    hash: " + lockHash(digest) + "\n"
 	must(t, os.WriteFile(filepath.Join(directory, "wippy.lock"), []byte(lock), 0644))
 	toolchain := filepath.Join(directory, "toolchain")
-	must(t, os.WriteFile(toolchain, []byte("#!/bin/sh\nif [ \"$1\" = lint ]; then exit 0; fi\nmkdir -p dist && printf root > \"$2\"\n"), 0755))
+	must(t, os.WriteFile(toolchain, []byte("#!/bin/sh\nif [ \"$1\" = lint ]; then exit 0; fi\nmkdir -p dist && printf root > \"$4\"\n"), 0755))
 	return path, toolchain, digest
 }
 
