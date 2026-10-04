@@ -3,9 +3,8 @@
 package assemble
 
 import (
-	"archive/tar"
+	"archive/zip"
 	"bytes"
-	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -15,7 +14,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Verify each checker profile in fresh state so a previous verification run
@@ -71,8 +69,7 @@ func writeLuaCacheSeed(cacheRoot, output string) (string, int, error) {
 	}
 
 	var archive bytes.Buffer
-	gz := gzip.NewWriter(&archive)
-	tarWriter := tar.NewWriter(gz)
+	zipWriter := zip.NewWriter(&archive)
 	fileCount := 0
 	entryNames := make(map[string]struct{})
 	err := filepath.WalkDir(entriesRoot, func(path string, entry os.DirEntry, walkErr error) error {
@@ -105,30 +102,19 @@ func writeLuaCacheSeed(cacheRoot, output string) (string, int, error) {
 			return fmt.Errorf("unexpected Lua cache file %q", name)
 		}
 		entryNames[parts[2]] = struct{}{}
-		info, err := entry.Info()
+		// Each member is compressed on its own so the runtime decompresses
+		// only the entries it reads; no timestamp keeps the seed reproducible.
+		header := &zip.FileHeader{Name: name, Method: zip.Deflate}
+		header.SetMode(0o600)
+		member, err := zipWriter.CreateHeader(header)
 		if err != nil {
-			return err
-		}
-		header, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return err
-		}
-		header.Name = name
-		header.Mode = 0o600
-		header.Uid, header.Gid = 0, 0
-		header.ModTime = time.Time{}
-		header.AccessTime = time.Time{}
-		header.ChangeTime = time.Time{}
-		header.Typeflag = tar.TypeReg
-		header.Format = tar.FormatUSTAR
-		if err := tarWriter.WriteHeader(header); err != nil {
 			return err
 		}
 		file, err := os.Open(path)
 		if err != nil {
 			return err
 		}
-		_, copyErr := io.Copy(tarWriter, file)
+		_, copyErr := io.Copy(member, file)
 		closeErr := file.Close()
 		if copyErr != nil {
 			return copyErr
@@ -140,15 +126,10 @@ func writeLuaCacheSeed(cacheRoot, output string) (string, int, error) {
 		return nil
 	})
 	if err != nil {
-		_ = tarWriter.Close()
-		_ = gz.Close()
+		_ = zipWriter.Close()
 		return "", 0, err
 	}
-	if err := tarWriter.Close(); err != nil {
-		_ = gz.Close()
-		return "", 0, err
-	}
-	if err := gz.Close(); err != nil {
+	if err := zipWriter.Close(); err != nil {
 		return "", 0, err
 	}
 	if fileCount == 0 {

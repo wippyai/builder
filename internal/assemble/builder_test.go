@@ -3,6 +3,7 @@ package assemble
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -122,18 +123,14 @@ func TestLuaCacheSeedArchiveIsContentAddressedAndDeterministic(t *testing.T) {
 	if !bytes.Equal(first, second) {
 		t.Fatal("cache seed archive is not deterministic")
 	}
-	compressed, err := gzip.NewReader(bytes.NewReader(first))
+	archive, err := zip.NewReader(bytes.NewReader(first), int64(len(first)))
 	must(t, err)
-	defer compressed.Close()
-	archive := tar.NewReader(compressed)
 	var names []string
-	for {
-		header, err := archive.Next()
-		if err == io.EOF {
-			break
+	for _, member := range archive.File {
+		if member.Method != zip.Deflate {
+			t.Fatalf("cache seed member %s is not compressed on its own", member.Name)
 		}
-		must(t, err)
-		names = append(names, header.Name)
+		names = append(names, member.Name)
 	}
 	want := []string{"v1/entries/" + key + "/meta.json", "v1/entries/" + key + "/proto.luac"}
 	if !slices.Equal(names, want) {
