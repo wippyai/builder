@@ -65,11 +65,7 @@ func Build(manifestPath, output string, toolchain bool) error {
 			return fmt.Errorf("warm non-strict embedded application cache: %w", err)
 		}
 		seedPath := filepath.Join(source, "cmd", "assembled", "lua-cache.seed")
-		seedDigest, _, err := writeLuaCacheSeed(luaCache, seedPath)
-		if err != nil {
-			return fmt.Errorf("create embedded Lua cache seed: %w", err)
-		}
-		if seedDigest != "" {
+		err = writeVerifiedLuaCacheSeed(luaCache, seedPath, func(seedDigest string) error {
 			generated, err := GenerateWithLuaCacheSeed(manifest, seedDigest)
 			if err != nil {
 				return err
@@ -80,9 +76,10 @@ func Build(manifestPath, output string, toolchain bool) error {
 			if err = run(source, env, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-tags", strings.Join(manifest.Runtime.Tags, ","), "-o", binary, "./cmd/assembled"); err != nil {
 				return err
 			}
-			if err = verifyLuaCacheSeed(stage, binary, env); err != nil {
-				return err
-			}
+			return verifyLuaCacheSeed(stage, binary, env)
+		})
+		if err != nil {
+			return err
 		}
 	}
 	return exportBuild(source, binary, outputs, manifest, env, toolchain)
