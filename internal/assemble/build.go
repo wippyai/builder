@@ -45,7 +45,7 @@ func Build(manifestPath, output string, toolchain bool) error {
 		return err
 	}
 	binary := filepath.Join(stage, manifest.Name)
-	if err = run(source, env, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-tags", strings.Join(manifest.Runtime.Tags, ","), "-o", binary, "."); err != nil {
+	if err = goBuild(source, env, manifest, binary); err != nil {
 		return err
 	}
 	if !toolchain {
@@ -77,7 +77,7 @@ func Build(manifestPath, output string, toolchain bool) error {
 			if err = atomicWrite(filepath.Join(source, "main.go"), generated, 0644); err != nil {
 				return err
 			}
-			if err = run(source, env, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-tags", strings.Join(manifest.Runtime.Tags, ","), "-o", binary, "."); err != nil {
+			if err = goBuild(source, env, manifest, binary); err != nil {
 				return err
 			}
 			if err = verifyLuaCacheSeed(stage, binary, env); err != nil {
@@ -86,6 +86,26 @@ func Build(manifestPath, output string, toolchain bool) error {
 		}
 	}
 	return exportBuild(source, binary, outputs, manifest, env, toolchain)
+}
+
+// goBuild compiles the application with the runtime's version variables
+// stamped from the runtime module the build resolved, so the binary reports
+// the runtime it runs.
+func goBuild(source string, env []string, manifest *Manifest, binary string) error {
+	resolved, err := capture(source, env, "go", "list", "-mod=readonly", "-m", "-f", "{{.Version}}", manifest.Runtime.Module)
+	if err != nil {
+		return fmt.Errorf("resolve runtime module version: %w", err)
+	}
+	return run(source, env, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false",
+		"-tags", strings.Join(manifest.Runtime.Tags, ","),
+		"-ldflags", runtimeVersionFlags(manifest.Runtime, strings.TrimSpace(string(resolved))), "-o", binary, ".")
+}
+
+// runtimeVersionFlags sets the runtime's reported version to the resolved
+// module version and its commit to the manifest's pin.
+func runtimeVersionFlags(runtime Runtime, resolved string) string {
+	pkg := runtime.Module + "/api/version"
+	return "-X " + pkg + ".Version=" + resolved + " -X " + pkg + ".Commit=" + runtime.Version
 }
 
 func strictLintArgs(luaCache string) []string {

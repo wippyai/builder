@@ -328,3 +328,11 @@ func TestSemanticVersions(t *testing.T) {
 		}
 	}
 }
+
+func TestRuntimeVersionFlagsStampResolvedRuntime(t *testing.T) {
+	flags := runtimeVersionFlags(Runtime{Module: "github.com/wippyai/runtime", Version: "abc123"}, "v0.1.14-0.20261003-abc123")
+	want := "-X github.com/wippyai/runtime/api/version.Version=v0.1.14-0.20261003-abc123 -X github.com/wippyai/runtime/api/version.Commit=abc123"
+	if flags != want {
+		t.Fatalf("runtime version flags %q, want %q", flags, want)
+	}
+}
