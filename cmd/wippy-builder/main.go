@@ -104,14 +104,14 @@ func newPackCommand() *cobra.Command {
 }
 
 func newSealCommand() *cobra.Command {
-	var version, mode string
+	var version string
 	command := &cobra.Command{
 		Use:     "seal MANIFEST",
 		Short:   "Record checksums for intentionally regenerated packs",
-		Example: "  wippy-builder seal wippy.build.json --mode bootstrap",
+		Example: "  wippy-builder seal wippy.build.json --version 2.0.0",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(command *cobra.Command, args []string) error {
-			if err := assemble.Seal(args[0], version, mode); err != nil {
+			if err := assemble.Seal(args[0], version); err != nil {
 				return err
 			}
 			completed(command, "Updated pack checksums in", args[0])
@@ -119,7 +119,6 @@ func newSealCommand() *cobra.Command {
 		},
 	}
 	command.Flags().StringVar(&version, "version", "", "Root application version")
-	command.Flags().StringVar(&mode, "mode", "", "Embedded deployment mode: base or bootstrap")
 	return command
 }
 

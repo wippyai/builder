@@ -7,6 +7,7 @@ func TestRejectsOptionsThatWouldOtherwiseBeIgnored(t *testing.T) {
 	for _, args := range [][]string{
 		{"build", "manifest.json", "--output", "binary", "--version", "2.0.0"},
 		{"validate", "manifest.json", "--mode", "bootstrap"},
+		{"seal", "manifest.json", "--mode", "bootstrap"},
 		{"pack", "manifest.json", "--output", "binary"},
 	} {
 		if err := execute(args); err == nil {

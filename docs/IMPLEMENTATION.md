@@ -12,10 +12,10 @@ on Linux amd64. Both use the same manifest and runtime host API.
 | `examples/hello` | Standalone application and executable acceptance fixture |
 | `action.yml` | Reusable GitHub action |
 | `.github/workflows/check.yml` | Builder tests, application acceptance and archive verification |
-| Runtime `application` package | Embedded deployment, command dispatch, updates and recovery |
+| Runtime `cmd/app` package | Embedded deployment, command dispatch, updates and recovery |
 | Application repository | Lua/UI code, native extensions, permissions and acceptance tests |
 
-The generated entry point calls `application.Run`. Development toolchains call
+The generated entry point calls `app.Main`. Development toolchains call
 `cmd.ExecuteWithOptions`. Runtime boot components register native services and
 typed Lua modules. See the [SDK guide](SDK.md) for the authoring APIs and their
 revision requirements.
@@ -25,11 +25,22 @@ revision requirements.
 A manifest selects an exact runtime commit, Go toolchain, build tags,
 versioned application packs and native component factories.
 The assembler copies pack inputs into staging and verifies their
-hashes before invoking build tools. Git operates on a temporary checkout. Go
-workspaces and ambient build flags are disabled.
+hashes before invoking build tools. Git fetches the pinned runtime into a
+temporary object clone, then exports that commit into the build source tree.
+Go workspaces and ambient build flags are disabled.
 
 Runtime changes belong upstream. Manifest decoding rejects `runtime.patches`;
 the assembler compiles the selected runtime with a generated command entrypoint.
+Application builds run strict lint, warm the cache in the validation state,
+embed the verified cache archive, then build again. The shipped executable
+imports that cache into its state only after checking its digest, cache schema
+and Lua toolchain identity.
+
+Each default/strict/non-strict cache verification uses independent fresh state
+and requires observed cache hits with no misses. The runtime retains
+the normal fingerprint checks and cold-compilation fallback; update cache
+retention is optional. Source-archive extraction uses Go's `os.Root` so an
+escaping parent symlink cannot redirect writes outside the staging directory.
 
 Go's selected package owner and module version must match each native pin.
 The build emits an executable, provenance, effective Go module files, available
@@ -54,9 +65,9 @@ Hub resolver and linter, verifies pack digests and activates the result after
 success. Failed updates retain the previous selection. The advanced
 `runtime update` command modifies the selected deployment directly.
 
-Base mode exposes explicit embedded-code recovery with separate registry
-history. Bootstrap mode seeds initial state. Both preserve application databases;
-the application's migration checks govern compatibility with older code.
+`recover` boots shipped code with separate registry history without changing the
+installed selection. It preserves application databases; the application's
+migration checks govern compatibility with older code.
 Activation requires a restart. Native code changes require a new executable.
 
 ## Validation
@@ -66,8 +77,8 @@ validation, generated source, input protection, exact native dependency ownershi
 atomic file writes, artifact tampering and archive metadata.
 
 Executable acceptance covers source-free boot, exact argument forwarding,
-base/bootstrap behavior, Hub root and dependency updates, cold restart, base
-recovery and failed-update preservation. CI runs first-boot acceptance with
+Hub root and dependency updates, cold restart, recovery and failed-update
+preservation. CI runs first-boot acceptance with
 networking disabled.
 
 Bee's consuming workflow adds typed Lua checks, filesystem permission and event

@@ -47,10 +47,22 @@ jobs:
     needs: unit
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [legacy, zip]
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         persist-credentials: false
+    - name: Select runtime with entry-by-entry cache and standalone launch settings
+      if: matrix.seed == 'zip'
+      env:
+        RUNTIME_COMMIT: 333694976a105c9b5fd018f5c00e7bb500eacd79
+      run: |
+        task_manifest=$(mktemp)
+        jq --arg commit "$RUNTIME_COMMIT" '.runtime.commit = $commit | .application.state = ".hello" | .application.owned = {command: "arguments"}' examples/hello/wippy.build.json > "$task_manifest"
+        mv "$task_manifest" examples/hello/wippy.build.json
     - name: Build pinned development runtime
       uses: ./
       with:
@@ -64,22 +76,18 @@ jobs:
         manifest: examples/hello/wippy.build.json
         output: dist/hello
     - name: Verify standalone execution with networking disabled
+      env:
+        WIPPY_TEST_LAUNCH_BINARY: ${{ matrix.seed == 'zip' && format('{0}/dist/hello', github.workspace) || '' }}
       run: |
         GOWORK=off go test -c -o dist/acceptance ./internal/assemble
-        sudo unshare --net -- env WIPPY_TEST_BINARY="$PWD/dist/hello" ./dist/acceptance -test.run '^Test(Standalone|Arguments)$' -test.v
+        sudo unshare --net -- env WIPPY_TEST_BINARY="$PWD/dist/hello" WIPPY_TEST_LAUNCH_BINARY="$WIPPY_TEST_LAUNCH_BINARY" ./dist/acceptance -test.run '^Test(Standalone|Arguments|ApplicationLaunchBinary)$' -test.v
     - name: Verify canonical Hub updates through the binary
       run: GOWORK=off WIPPY_TEST_BINARY="$PWD/dist/hello" WIPPY_TEST_MANIFEST="$PWD/examples/hello/wippy.build.json" go test ./internal/assemble -run '^TestHub$' -count=1 -v
-    - name: Verify bootstrap mode
-      run: |
-        cp examples/hello/wippy.build.json examples/hello/bootstrap.json
-        dist/wippy-builder seal examples/hello/bootstrap.json --mode bootstrap
-        dist/wippy-builder build examples/hello/bootstrap.json --output dist/hello-bootstrap
-        WIPPY_TEST_BINARY="$PWD/dist/hello-bootstrap" WIPPY_TEST_BOOTSTRAP=1 ./dist/acceptance -test.run '^TestStandalone$' -test.v
     - name: Archive release inputs
       run: dist/wippy-builder package dist/hello --output dist/hello-linux-amd64.tar.gz
     - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
       with:
-        name: hello-linux-amd64
+        name: hello-linux-amd64-${{ matrix.seed }}
         path: |
           dist/hello-linux-amd64.tar.gz
           dist/hello-linux-amd64.tar.gz.sha256

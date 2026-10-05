@@ -1,0 +1,2 @@
+# Golden Go output must match go/format's LF output on every platform.
+*.golden text eol=lf

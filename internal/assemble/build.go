@@ -37,7 +37,7 @@ func Build(manifestPath, output string, toolchain bool) error {
 	if err != nil {
 		return err
 	}
-	source, err := prepareSource(stage, manifest, inputs, toolchain)
+	source, err := prepareSource(stage, manifest, inputs, toolchain, env)
 	if err != nil {
 		return err
 	}
@@ -49,16 +49,48 @@ func Build(manifestPath, output string, toolchain bool) error {
 		return err
 	}
 	if !toolchain {
-		args := append([]string{"--state-dir", filepath.Join(stage, "validation-state"), "runtime"}, strictLintArgs()...)
+		validationState := filepath.Join(stage, "validation-state")
+		luaCache := filepath.Join(validationState, "cache", "lua")
+		args := append([]string{"--state", validationState, "wippy"}, strictLintArgs(luaCache)...)
 		if err = run(stage, env, binary, args...); err != nil {
 			return fmt.Errorf("validate embedded application: %w", err)
+		}
+		args = []string{"--state", validationState, "wippy", "lint", "--set", "lua.cache.dir=" + luaCache}
+		if err = run(stage, env, binary, args...); err != nil {
+			return fmt.Errorf("warm embedded application cache: %w", err)
+		}
+		args = []string{"--state", validationState, "wippy", "lint", "--set", "lua.cache.dir=" + luaCache,
+			"--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=false"}
+		if err = run(stage, env, binary, args...); err != nil {
+			return fmt.Errorf("warm non-strict embedded application cache: %w", err)
+		}
+		seedPath := filepath.Join(source, "cmd", "assembled", "lua-cache.seed")
+		err = writeVerifiedLuaCacheSeed(luaCache, seedPath, func(seedDigest string) error {
+			generated, err := GenerateWithLuaCacheSeed(manifest, seedDigest)
+			if err != nil {
+				return err
+			}
+			if err = atomicWrite(filepath.Join(source, "cmd", "assembled", "main.go"), generated, 0644); err != nil {
+				return err
+			}
+			if err = run(source, env, "go", "build", "-mod=readonly", "-trimpath", "-buildvcs=false", "-tags", strings.Join(manifest.Runtime.Tags, ","), "-o", binary, "./cmd/assembled"); err != nil {
+				return err
+			}
+			return verifyLuaCacheSeed(stage, binary, env)
+		})
+		if err != nil {
+			return err
 		}
 	}
 	return exportBuild(source, binary, outputs, manifest, env, toolchain)
 }
 
-func strictLintArgs() []string {
-	return []string{"lint", "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true"}
+func strictLintArgs(luaCache string) []string {
+	args := []string{"lint"}
+	if luaCache != "" {
+		args = append(args, "--set", "lua.cache.dir="+luaCache)
+	}
+	return append(args, "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict=true")
 }
 
 func freezeInputs(manifestPath string, m *Manifest, outputs artifactSet, stage string, toolchain bool) (map[string]string, error) {
@@ -96,16 +128,21 @@ func freezeInputs(manifestPath string, m *Manifest, outputs artifactSet, stage s
 	return verified, nil
 }
 
-func prepareSource(stage string, m *Manifest, inputs map[string]string, toolchain bool) (string, error) {
+func prepareSource(stage string, m *Manifest, inputs map[string]string, toolchain bool, env []string) (string, error) {
+	repositorySource := filepath.Join(stage, "runtime.git")
 	source := filepath.Join(stage, "runtime")
 	repository := m.Runtime.Repository
 	if override := os.Getenv("WIPPY_BUILD_RUNTIME_REPOSITORY"); override != "" {
 		repository = override
 	}
-	if err := run("", nil, "git", "clone", "--no-checkout", "--filter=blob:none", repository, source); err != nil {
+	if err := run("", env, "git", "clone", "--no-checkout", "--filter=blob:none", repository, repositorySource); err != nil {
 		return "", err
 	}
-	if err := run(source, nil, "git", "checkout", "--detach", m.Runtime.Commit); err != nil {
+	archive, err := capture(repositorySource, env, "git", "archive", m.Runtime.Commit)
+	if err != nil {
+		return "", err
+	}
+	if err := extractRuntimeArchive(archive, source); err != nil {
 		return "", err
 	}
 	entry := filepath.Join(source, "cmd", "assembled")
