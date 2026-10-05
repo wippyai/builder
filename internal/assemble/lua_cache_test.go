@@ -35,6 +35,14 @@ func cacheVerifierFixture() error {
 		return errors.New("missing verification state")
 	}
 	state := os.Args[2]
+	switch os.Getenv("WIPPY_TEST_CACHE_VERIFIER_MODE") {
+	case "legacy-format":
+		return fmt.Errorf("install embedded Lua cache %s: open embedded cache archive: %w", filepath.Join(state, "cache", "lua"), gzip.ErrHeader)
+	case "lint-error":
+		return errors.New("application lint failed")
+	case "unrelated-header-error":
+		return fmt.Errorf("application error: open embedded cache archive: %w", gzip.ErrHeader)
+	}
 	marker := filepath.Join(state, "compiled")
 	stats := `{"compile_hits":1}`
 	if _, err := os.Stat(marker); os.IsNotExist(err) {
@@ -60,6 +68,21 @@ func TestVerifyLuaCacheSeedNeverReusesCompiledState(t *testing.T) {
 		if err := verifyLuaCacheSeed(stage, binary, env); !errors.Is(err, errLuaCacheSeedMiss) {
 			t.Fatalf("attempt %d falsely accepted rejected cache: %v", attempt, err)
 		}
+	}
+}
+
+func TestVerifyLuaCacheSeedRecognizesOnlyLegacyArchiveRejection(t *testing.T) {
+	binary, err := os.Executable()
+	must(t, err)
+	for _, mode := range []string{"legacy-format", "lint-error", "unrelated-header-error"} {
+		t.Run(mode, func(t *testing.T) {
+			env := setEnv(os.Environ(), "WIPPY_TEST_CACHE_VERIFIER", "1")
+			env = setEnv(env, "WIPPY_TEST_CACHE_VERIFIER_MODE", mode)
+			err := verifyLuaCacheSeed(t.TempDir(), binary, env)
+			if err == nil || errors.Is(err, errLuaCacheSeedMiss) != (mode == "legacy-format") {
+				t.Fatalf("incorrect format-retry classification: %v", err)
+			}
+		})
 	}
 }
 
@@ -151,7 +174,7 @@ func TestLuaCacheSeedArchiveUsesIndependentZIPMembers(t *testing.T) {
 		must(t, os.WriteFile(filepath.Join(entry, name), []byte(data), 0o600))
 	}
 	output := filepath.Join(root, "cache.seed")
-	digest, count, err := writeLuaCacheSeed(cacheRoot, output)
+	digest, count, err := writeLuaCacheSeed(cacheRoot, output, luaCacheSeedZIP)
 	must(t, err)
 	data, err := os.ReadFile(output)
 	must(t, err)

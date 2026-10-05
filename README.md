@@ -38,7 +38,8 @@ state; Hub updates are linted and add their cache entries to the same store.
 The embedded seed uses ZIP members compressed independently, so runtimes with
 entry-by-entry cache support need not inflate the entire cache at startup. Builds
 pinned to older runtimes retry the previous tar.gz seed only on observed cache
-misses; both attempts require fresh-state verification. Hub pack formats are
+misses or the legacy reader's format rejection; both attempts require
+fresh-state verification. Hub pack formats are
 unchanged, and build or lint failures never trigger a format retry.
 The build verifies cache hits in fresh state for default, strict and non-strict
 checker settings. Other settings or changed dependencies can miss the cache

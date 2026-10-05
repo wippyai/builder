@@ -46,8 +46,20 @@ func verifyLuaCacheSeed(stage, binary string, env []string) error {
 		if profile != "default" {
 			args = append(args, "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict="+strconv.FormatBool(profile == "strict"))
 		}
-		if err := run(stage, verifyEnv, binary, args...); err != nil {
-			return fmt.Errorf("verify %s embedded Lua cache seed: %w", profile, err)
+		c := command(stage, verifyEnv, binary, args...)
+		var stderr bytes.Buffer
+		c.Stdout = os.Stdout
+		c.Stderr = io.MultiWriter(os.Stderr, &stderr)
+		if err := c.Run(); err != nil {
+			failure := fmt.Errorf("%s: %w", binary, err)
+			// Older runtimes reject ZIP before they can emit cache statistics.
+			// Match the cache path too; an application error mentioning gzip
+			// must not be reclassified as a cache-format rejection.
+			legacyRejection := fmt.Sprintf("install embedded Lua cache %s: open embedded cache archive: %s", filepath.Join(state, "cache", "lua"), gzip.ErrHeader)
+			if bytes.Contains(stderr.Bytes(), []byte(legacyRejection)) {
+				failure = errors.Join(failure, fmt.Errorf("%w: legacy runtime requires tar.gz", errLuaCacheSeedMiss))
+			}
+			return fmt.Errorf("verify %s embedded Lua cache seed: %w", profile, failure)
 		}
 		if err := verifyLuaCacheStats(statsPath); err != nil {
 			return fmt.Errorf("verify %s embedded Lua cache hits: %w", profile, err)
@@ -79,17 +91,14 @@ func verifyLuaCacheStats(path string) error {
 	return nil
 }
 
-func writeLuaCacheSeed(cacheRoot, output string) (string, int, error) {
-	return writeLuaCacheSeedArchive(cacheRoot, output, luaCacheSeedZIP)
-}
-
 // Prefer individually compressed members. Older pinned runtimes read tar.gz,
-// so retry that format only on observed cache misses, never on build/lint errors.
+// so retry it only on cache misses or the legacy reader's format rejection,
+// never on build/lint errors.
 // The caller must verify each attempt in fresh state before exporting a binary.
 func writeVerifiedLuaCacheSeed(cacheRoot, output string, verify func(string) error) error {
 	var failures []error
 	for _, format := range []luaCacheSeedFormat{luaCacheSeedZIP, luaCacheSeedTarGzip} {
-		digest, _, err := writeLuaCacheSeedArchive(cacheRoot, output, format)
+		digest, _, err := writeLuaCacheSeed(cacheRoot, output, format)
 		if err != nil {
 			return fmt.Errorf("create %s embedded Lua cache seed: %w", format, err)
 		}
@@ -107,7 +116,7 @@ func writeVerifiedLuaCacheSeed(cacheRoot, output string, verify func(string) err
 	return errors.Join(failures...)
 }
 
-func writeLuaCacheSeedArchive(cacheRoot, output string, format luaCacheSeedFormat) (string, int, error) {
+func writeLuaCacheSeed(cacheRoot, output string, format luaCacheSeedFormat) (string, int, error) {
 	entriesRoot := filepath.Join(cacheRoot, "v1", "entries")
 	if _, err := os.Stat(entriesRoot); os.IsNotExist(err) {
 		return "", 0, nil

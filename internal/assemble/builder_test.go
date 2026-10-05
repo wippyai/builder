@@ -92,14 +92,14 @@ func TestLuaCacheSeedArchiveIsContentAddressedAndDeterministic(t *testing.T) {
 	must(t, os.WriteFile(filepath.Join(entry, "proto.luac"), []byte("proto"), 0600))
 
 	firstPath := filepath.Join(root, "first.seed")
-	firstDigest, firstEntries, err := writeLuaCacheSeed(cacheRoot, firstPath)
+	firstDigest, firstEntries, err := writeLuaCacheSeed(cacheRoot, firstPath, luaCacheSeedZIP)
 	must(t, err)
 	if firstEntries != 1 {
 		t.Fatalf("seed contains %d entries, want one", firstEntries)
 	}
 	must(t, os.Chtimes(filepath.Join(entry, "meta.json"), time.Now(), time.Now()))
 	secondPath := filepath.Join(root, "second.seed")
-	secondDigest, secondEntries, err := writeLuaCacheSeed(cacheRoot, secondPath)
+	secondDigest, secondEntries, err := writeLuaCacheSeed(cacheRoot, secondPath, luaCacheSeedZIP)
 	must(t, err)
 	if firstDigest != secondDigest || firstEntries != secondEntries {
 		t.Fatalf("cache seed changed with file timestamps: %s/%d vs %s/%d", firstDigest, firstEntries, secondDigest, secondEntries)
