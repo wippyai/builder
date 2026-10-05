@@ -86,7 +86,16 @@ func generate(m *Manifest, toolchain bool, cacheDigest string) ([]byte, error) {
 		for _, k := range keys {
 			fmt.Fprintf(&s, "%s:%s,", strconv.Quote(k), strconv.Quote(app.Data[k]))
 		}
-		fmt.Fprintf(&s, "},\nBundle: app.Bundle{Root: %q, Packs: []app.Pack{", app.Module)
+		s.WriteString("},\n")
+		// Omit unset launch fields so existing manifests still compile against
+		// runtimes from before these optional Executable fields were introduced.
+		if app.State != "" {
+			fmt.Fprintf(&s, "State: %q,\n", app.State)
+		}
+		if app.Owned != nil {
+			fmt.Fprintf(&s, "OwnedCommand: %q,\n", app.Owned.Command)
+		}
+		fmt.Fprintf(&s, "Bundle: app.Bundle{Root: %q, Packs: []app.Pack{", app.Module)
 		for i, p := range app.Packs {
 			fmt.Fprintf(&s, "{Module:%q,Version:%q,Digest:%q,Data:pack%d},", p.Module, p.Version, "sha256:"+p.SHA256, i)
 		}
