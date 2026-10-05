@@ -33,8 +33,14 @@ type Runtime struct {
 type Application struct {
 	Module  string            `json:"module"`
 	Command string            `json:"command"`
+	State   string            `json:"state,omitempty"`
+	Owned   *Owned            `json:"owned,omitempty"`
 	Data    map[string]string `json:"data,omitempty"`
 	Packs   []Pack            `json:"packs"`
+}
+
+type Owned struct {
+	Command string `json:"command"`
 }
 type Native struct {
 	Module  string `json:"module"`
@@ -121,6 +127,12 @@ func (m *Manifest) Validate() error {
 	app := m.Application
 	if !matches(modulePattern, app.Module) || app.Command == "" {
 		return fmt.Errorf("invalid application identity or command")
+	}
+	if strings.ContainsRune(app.State, 0) {
+		return fmt.Errorf("application.state must not contain NUL")
+	}
+	if app.Owned != nil && (app.Owned.Command == "" || strings.ContainsRune(app.Owned.Command, 0)) {
+		return fmt.Errorf("application.owned.command must be nonempty and contain no NUL")
 	}
 	modules := map[string]bool{}
 	for _, p := range app.Packs {
