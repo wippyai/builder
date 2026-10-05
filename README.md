@@ -33,8 +33,15 @@ make build MANIFEST=examples/hello/wippy.build.json OUTPUT=dist/hello
 ```
 
 The executable contains the runtime, application packs and a verified Lua
-compile/typecheck cache. First boot seeds the deployment and cache into its
-state; Hub updates are linted and add their cache entries to the same store.
+compile/typecheck cache. First boot seeds the deployment into its state. The
+embedded cache serves unchanged entries; Hub updates are linted and add their
+cache entries to the persistent store.
+The embedded seed uses ZIP members compressed independently, so runtimes with
+entry-by-entry cache support need not inflate the entire cache at startup. Builds
+pinned to older runtimes retry the previous tar.gz seed only on observed cache
+misses or the legacy reader's format rejection; both attempts require
+fresh-state verification. Hub pack formats are
+unchanged, and build or lint failures never trigger a format retry.
 The build verifies cache hits in fresh state for default, strict and non-strict
 checker settings. Other settings or changed dependencies can miss the cache
 and are compiled normally; cache retention failure does not reject a valid update.

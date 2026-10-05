@@ -4,11 +4,13 @@ package assemble
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -18,19 +20,46 @@ import (
 	"time"
 )
 
+var errLuaCacheSeedMiss = errors.New("embedded Lua cache seed was not used")
+
+type luaCacheSeedFormat string
+
+const (
+	luaCacheSeedZIP     luaCacheSeedFormat = "zip"
+	luaCacheSeedTarGzip luaCacheSeedFormat = "tar.gz"
+)
+
 // Verify each checker profile in fresh state so a previous verification run
 // cannot supply the entries that the embedded seed is expected to provide.
 func verifyLuaCacheSeed(stage, binary string, env []string) error {
+	// A format retry must not read entries compiled by the previous attempt.
+	verification, err := os.MkdirTemp(stage, "cache-verification-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(verification)
 	for _, profile := range []string{"default", "strict", "non-strict"} {
-		state := filepath.Join(stage, "cache-verification-"+profile)
-		statsPath := filepath.Join(stage, "lua-cache-stats-"+profile+".json")
+		state := filepath.Join(verification, profile)
+		statsPath := filepath.Join(verification, "lua-cache-stats-"+profile+".json")
 		verifyEnv := setEnv(env, "WIPPY_LUA_LINT_CACHE_STATS_FILE", statsPath)
 		args := []string{"--state", state, "wippy", "lint", "--set", "lua.cache.dir=" + filepath.Join(state, "cache", "lua")}
 		if profile != "default" {
 			args = append(args, "--set", "lua.type_system.enabled=true", "--set", "lua.type_system.strict="+strconv.FormatBool(profile == "strict"))
 		}
-		if err := run(stage, verifyEnv, binary, args...); err != nil {
-			return fmt.Errorf("verify %s embedded Lua cache seed: %w", profile, err)
+		c := command(stage, verifyEnv, binary, args...)
+		var stderr bytes.Buffer
+		c.Stdout = os.Stdout
+		c.Stderr = io.MultiWriter(os.Stderr, &stderr)
+		if err := c.Run(); err != nil {
+			failure := fmt.Errorf("%s: %w", binary, err)
+			// Older runtimes reject ZIP before they can emit cache statistics.
+			// Match the cache path too; an application error mentioning gzip
+			// must not be reclassified as a cache-format rejection.
+			legacyRejection := fmt.Sprintf("install embedded Lua cache %s: open embedded cache archive: %s", filepath.Join(state, "cache", "lua"), gzip.ErrHeader)
+			if bytes.Contains(stderr.Bytes(), []byte(legacyRejection)) {
+				failure = errors.Join(failure, fmt.Errorf("%w: legacy runtime requires tar.gz", errLuaCacheSeedMiss))
+			}
+			return fmt.Errorf("verify %s embedded Lua cache seed: %w", profile, failure)
 		}
 		if err := verifyLuaCacheStats(statsPath); err != nil {
 			return fmt.Errorf("verify %s embedded Lua cache hits: %w", profile, err)
@@ -54,15 +83,40 @@ func verifyLuaCacheStats(path string) error {
 		return err
 	}
 	if stats.CompileHits == 0 && stats.TypecheckHits == 0 {
-		return fmt.Errorf("no Lua cache entries were read")
+		return fmt.Errorf("%w: no Lua cache entries were read", errLuaCacheSeedMiss)
 	}
 	if stats.CompileMisses != 0 || stats.TypecheckMisses != 0 {
-		return fmt.Errorf("compile misses %d, typecheck misses %d", stats.CompileMisses, stats.TypecheckMisses)
+		return fmt.Errorf("%w: compile misses %d, typecheck misses %d", errLuaCacheSeedMiss, stats.CompileMisses, stats.TypecheckMisses)
 	}
 	return nil
 }
 
-func writeLuaCacheSeed(cacheRoot, output string) (string, int, error) {
+// Prefer individually compressed members. Older pinned runtimes read tar.gz,
+// so retry it only on cache misses or the legacy reader's format rejection,
+// never on build/lint errors.
+// The caller must verify each attempt in fresh state before exporting a binary.
+func writeVerifiedLuaCacheSeed(cacheRoot, output string, verify func(string) error) error {
+	var failures []error
+	for _, format := range []luaCacheSeedFormat{luaCacheSeedZIP, luaCacheSeedTarGzip} {
+		digest, _, err := writeLuaCacheSeed(cacheRoot, output, format)
+		if err != nil {
+			return fmt.Errorf("create %s embedded Lua cache seed: %w", format, err)
+		}
+		if digest == "" {
+			return nil
+		}
+		if err = verify(digest); err == nil {
+			return nil
+		}
+		if !errors.Is(err, errLuaCacheSeedMiss) {
+			return err
+		}
+		failures = append(failures, fmt.Errorf("%s: %w", format, err))
+	}
+	return errors.Join(failures...)
+}
+
+func writeLuaCacheSeed(cacheRoot, output string, format luaCacheSeedFormat) (string, int, error) {
 	entriesRoot := filepath.Join(cacheRoot, "v1", "entries")
 	if _, err := os.Stat(entriesRoot); os.IsNotExist(err) {
 		return "", 0, nil
@@ -71,8 +125,24 @@ func writeLuaCacheSeed(cacheRoot, output string) (string, int, error) {
 	}
 
 	var archive bytes.Buffer
-	gz := gzip.NewWriter(&archive)
-	tarWriter := tar.NewWriter(gz)
+	var zipWriter *zip.Writer
+	var gz *gzip.Writer
+	var tarWriter *tar.Writer
+	switch format {
+	case luaCacheSeedZIP:
+		zipWriter = zip.NewWriter(&archive)
+	case luaCacheSeedTarGzip:
+		gz = gzip.NewWriter(&archive)
+		tarWriter = tar.NewWriter(gz)
+	default:
+		return "", 0, fmt.Errorf("unsupported Lua cache seed format %q", format)
+	}
+	closeArchive := func() error {
+		if zipWriter != nil {
+			return zipWriter.Close()
+		}
+		return errors.Join(tarWriter.Close(), gz.Close())
+	}
 	fileCount := 0
 	entryNames := make(map[string]struct{})
 	err := filepath.WalkDir(entriesRoot, func(path string, entry os.DirEntry, walkErr error) error {
@@ -105,30 +175,41 @@ func writeLuaCacheSeed(cacheRoot, output string) (string, int, error) {
 			return fmt.Errorf("unexpected Lua cache file %q", name)
 		}
 		entryNames[parts[2]] = struct{}{}
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		header, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return err
-		}
-		header.Name = name
-		header.Mode = 0o600
-		header.Uid, header.Gid = 0, 0
-		header.ModTime = time.Time{}
-		header.AccessTime = time.Time{}
-		header.ChangeTime = time.Time{}
-		header.Typeflag = tar.TypeReg
-		header.Format = tar.FormatUSTAR
-		if err := tarWriter.WriteHeader(header); err != nil {
-			return err
+		var member io.Writer
+		if zipWriter != nil {
+			header := &zip.FileHeader{Name: name, Method: zip.Deflate}
+			header.SetMode(0o600)
+			member, err = zipWriter.CreateHeader(header)
+			if err != nil {
+				return err
+			}
+		} else {
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			header, err := tar.FileInfoHeader(info, "")
+			if err != nil {
+				return err
+			}
+			header.Name = name
+			header.Mode = 0o600
+			header.Uid, header.Gid = 0, 0
+			header.ModTime = time.Time{}
+			header.AccessTime = time.Time{}
+			header.ChangeTime = time.Time{}
+			header.Typeflag = tar.TypeReg
+			header.Format = tar.FormatUSTAR
+			if err := tarWriter.WriteHeader(header); err != nil {
+				return err
+			}
+			member = tarWriter
 		}
 		file, err := os.Open(path)
 		if err != nil {
 			return err
 		}
-		_, copyErr := io.Copy(tarWriter, file)
+		_, copyErr := io.Copy(member, file)
 		closeErr := file.Close()
 		if copyErr != nil {
 			return copyErr
@@ -140,15 +221,10 @@ func writeLuaCacheSeed(cacheRoot, output string) (string, int, error) {
 		return nil
 	})
 	if err != nil {
-		_ = tarWriter.Close()
-		_ = gz.Close()
+		_ = closeArchive()
 		return "", 0, err
 	}
-	if err := tarWriter.Close(); err != nil {
-		_ = gz.Close()
-		return "", 0, err
-	}
-	if err := gz.Close(); err != nil {
+	if err := closeArchive(); err != nil {
 		return "", 0, err
 	}
 	if fileCount == 0 {

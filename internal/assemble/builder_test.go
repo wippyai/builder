@@ -3,6 +3,7 @@ package assemble
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bytes"
 	"compress/gzip"
 	"context"
@@ -91,14 +92,14 @@ func TestLuaCacheSeedArchiveIsContentAddressedAndDeterministic(t *testing.T) {
 	must(t, os.WriteFile(filepath.Join(entry, "proto.luac"), []byte("proto"), 0600))
 
 	firstPath := filepath.Join(root, "first.seed")
-	firstDigest, firstEntries, err := writeLuaCacheSeed(cacheRoot, firstPath)
+	firstDigest, firstEntries, err := writeLuaCacheSeed(cacheRoot, firstPath, luaCacheSeedZIP)
 	must(t, err)
 	if firstEntries != 1 {
 		t.Fatalf("seed contains %d entries, want one", firstEntries)
 	}
 	must(t, os.Chtimes(filepath.Join(entry, "meta.json"), time.Now(), time.Now()))
 	secondPath := filepath.Join(root, "second.seed")
-	secondDigest, secondEntries, err := writeLuaCacheSeed(cacheRoot, secondPath)
+	secondDigest, secondEntries, err := writeLuaCacheSeed(cacheRoot, secondPath, luaCacheSeedZIP)
 	must(t, err)
 	if firstDigest != secondDigest || firstEntries != secondEntries {
 		t.Fatalf("cache seed changed with file timestamps: %s/%d vs %s/%d", firstDigest, firstEntries, secondDigest, secondEntries)
@@ -110,18 +111,11 @@ func TestLuaCacheSeedArchiveIsContentAddressedAndDeterministic(t *testing.T) {
 	if !bytes.Equal(first, second) {
 		t.Fatal("cache seed archive is not deterministic")
 	}
-	compressed, err := gzip.NewReader(bytes.NewReader(first))
+	archive, err := zip.NewReader(bytes.NewReader(first), int64(len(first)))
 	must(t, err)
-	defer compressed.Close()
-	archive := tar.NewReader(compressed)
 	var names []string
-	for {
-		header, err := archive.Next()
-		if err == io.EOF {
-			break
-		}
-		must(t, err)
-		names = append(names, header.Name)
+	for _, member := range archive.File {
+		names = append(names, member.Name)
 	}
 	want := []string{"v1/entries/" + key + "/meta.json", "v1/entries/" + key + "/proto.luac"}
 	if !slices.Equal(names, want) {

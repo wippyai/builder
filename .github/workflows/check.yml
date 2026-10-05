@@ -47,10 +47,22 @@ jobs:
     needs: unit
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [legacy, zip]
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       with:
         persist-credentials: false
+    - name: Select runtime with entry-by-entry cache support
+      if: matrix.seed == 'zip'
+      env:
+        RUNTIME_COMMIT: 7459f97d9e4def0bc104424f8e18cc0031f03b68
+      run: |
+        task_manifest=$(mktemp)
+        jq --arg commit "$RUNTIME_COMMIT" '.runtime.commit = $commit' examples/hello/wippy.build.json > "$task_manifest"
+        mv "$task_manifest" examples/hello/wippy.build.json
     - name: Build pinned development runtime
       uses: ./
       with:
@@ -73,7 +85,7 @@ jobs:
       run: dist/wippy-builder package dist/hello --output dist/hello-linux-amd64.tar.gz
     - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
       with:
-        name: hello-linux-amd64
+        name: hello-linux-amd64-${{ matrix.seed }}
         path: |
           dist/hello-linux-amd64.tar.gz
           dist/hello-linux-amd64.tar.gz.sha256
