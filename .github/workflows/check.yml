@@ -85,7 +85,7 @@ jobs:
       run: GOWORK=off WIPPY_TEST_BINARY="$PWD/dist/hello" WIPPY_TEST_MANIFEST="$PWD/examples/hello/wippy.build.json" go test ./internal/assemble -run '^TestHub$' -count=1 -v
     - name: Archive release inputs
       run: dist/wippy-builder package dist/hello --output dist/hello-linux-amd64.tar.gz
-    - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
       with:
         name: hello-linux-amd64-${{ matrix.seed }}
         path: |
